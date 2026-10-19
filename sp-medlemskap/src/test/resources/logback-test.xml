@@ -1,0 +1,30 @@
+<configuration>
+    <appender name="nav-logs" class="ch.qos.logback.core.read.ListAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>NOT_NAV_LOGS</marker>
+            </evaluator>
+            <OnMatch>DENY</OnMatch>
+            <OnMismatch>ACCEPT</OnMismatch>
+        </filter>
+    </appender>
+
+    <appender name="team-logs" class="ch.qos.logback.core.read.ListAppender">
+        <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+            <evaluator class="ch.qos.logback.classic.boolex.OnMarkerEvaluator">
+                <marker>NOT_TEAM_LOGS</marker>
+            </evaluator>
+            <OnMatch>DENY</OnMatch>
+            <OnMismatch>ACCEPT</OnMismatch>
+        </filter>
+    </appender>
+
+    <logger name="tjenestekall" level="DEBUG" additivity="false">
+        <appender-ref ref="team-logs"/>
+    </logger>
+
+    <root level="DEBUG">
+        <appender-ref ref="nav-logs"/>
+        <appender-ref ref="team-logs"/>
+    </root>
+</configuration>

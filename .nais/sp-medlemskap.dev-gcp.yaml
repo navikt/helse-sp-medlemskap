@@ -1,0 +1,29 @@
+spec:
+  gcp:
+    sqlInstances:
+      - type: POSTGRES_18
+        diskAutoresize: true
+        tier: "db-f1-micro"
+        name: sp-medlemskap
+        databases:
+          - name: sp-medlemskap
+            envVarPrefix: DATABASE
+            users:
+              - name: "sp-medlemskap-opprydding-dev"
+  kafka:
+    pool: nav-dev
+  azure:
+    application:
+      claims:
+        groups:
+          - id: cda797bb-ac3b-4440-b661-2cd5eb3edba0 # 0000-CA-Speil-Saksbehandler
+          - id: 216b7219-3906-43c5-8e22-03fb74133b42 # 0000-CA-Speil_Lesetilgang
+  env:
+    - name: TILGANGSMASKINEN_SCOPE
+      value: "api://dev-gcp.tilgangsmaskin.populasjonstilgangskontroll/.default"
+    - name: TILGANG_SKRIV
+      value: cda797bb-ac3b-4440-b661-2cd5eb3edba0 # 0000-CA-Speil-Saksbehandler
+    - name: TILGANG_LES
+      value: 216b7219-3906-43c5-8e22-03fb74133b42 # 0000-CA-Speil_Lesetilgang
+    - name: DB_POOL_SIZE
+      value: "5"

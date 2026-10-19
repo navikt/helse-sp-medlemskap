@@ -1,0 +1,69 @@
+name: main - opprydding-dev - Bygg, test og deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Generelt oppsett - alt unntatt dokumentasjon / urelatert oppsett
+      - '**'
+      - '!**.md'
+      - '!CODEOWNERS'
+      - '!LICENSE'
+      - '!docs/**'
+      - '!.nais/**'
+      - '!.github/workflows/standard-dependabot-auto-merge.yml'
+      - '!.github/workflows/standard-dependency-submission.yml'
+      # Ressursene som deployes av denne workflowen
+      - '.nais/opprydding-dev.yaml'
+      - '.nais/dev-db-policy.yaml'
+      # Spesielt for denne tjenesten ellers
+      - '!.github/workflows/standard-pr.yml'
+      - '!.github/workflows/main-sp-medlemskap.yml'
+      - '!sp-medlemskap/**'
+  schedule:
+    - cron: '0 4 * * 3'
+      timezone: 'Europe/Oslo'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read # for sarif
+  contents: read
+  security-events: write # push sarif to github security
+  id-token: write # for nais login
+
+jobs:
+  bygg-og-test:
+    name: Bygg og test
+    uses: navikt/sykepenger-github-workflows/.github/workflows/bygg-og-test-med-gradle.yml@fc1bc4b862baacc4b4d8e0519bf3dc9040a2e644 # v1.0.11
+    permissions:
+      contents: read
+
+  bygg-image:
+    name: Bygg image
+    needs: bygg-og-test
+    uses: navikt/sykepenger-github-workflows/.github/workflows/bygg-modul-image-med-jib.yml@fc1bc4b862baacc4b4d8e0519bf3dc9040a2e644 # v1.0.11
+    with:
+      modul: opprydding-dev
+    permissions:
+      actions: read # for sarif upload on private repos
+      contents: read
+      id-token: write # for nais login
+      security-events: write # push sarif to github security
+
+  deploy-dev:
+    name: Deploy til dev
+    needs: bygg-image
+    uses: navikt/sykepenger-github-workflows/.github/workflows/deploy-v2.yml@fc1bc4b862baacc4b4d8e0519bf3dc9040a2e644 # v1.0.11
+    with:
+      manifest: .nais/opprydding-dev.yaml
+      environment: dev-gcp
+      image: ${{ needs.bygg-image.outputs.image_ref }}
+      extra_manifests: .nais/dev-db-policy.yaml
+    permissions:
+      contents: read
+      id-token: write # for nais login
