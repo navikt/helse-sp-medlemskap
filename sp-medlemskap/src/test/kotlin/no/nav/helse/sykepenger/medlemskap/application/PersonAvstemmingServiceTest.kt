@@ -1,19 +1,15 @@
 package no.nav.helse.sykepenger.medlemskap.application
 
-import no.nav.helse.sykepenger.medlemskap.domain.Arbeidsforhold
-import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsgrunnlag
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.tilMedlemskapsvurdering
-import no.nav.helse.til
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -60,56 +56,26 @@ internal class PersonAvstemmingServiceTest {
         )
     }
 
-    @ParameterizedTest
-    @CsvSource(
-        "'', UKJENT_PRIVAT",
-        "'   ', UKJENT_PRIVAT",
-        "987654321, 987654321",
-    )
-    fun `lagrer arbeidsforhold fra spleis med UKJENT_PRIVAT bare når organisasjonsnummer er blankt`(
-        organisasjonsnummer: String,
-        forventetOrgnummer: String,
-    ) {
-        val ansattFom = LocalDate.of(2025, 12, 1)
-        val skjæringstidspunkt = LocalDate.of(2026, 1, 1)
-        spleisSvar =
-            listOf(
-                SpleisMedlemskapsvurdering.SpleisArbeidstaker(
-                    medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
-                    opprettet = Instant.now(),
-                    skjæringstidspunkt = skjæringstidspunkt,
-                    oppfylt = true,
-                    antallDager = 31,
-                    medlemskapsperiode = ansattFom til skjæringstidspunkt.minusDays(1),
-                    arbeidsforhold =
-                        listOf(
-                            SpleisMedlemskapsvurdering.SpleisArbeidstaker.Arbeidsforhold(
-                                organisasjonsnummer = organisasjonsnummer,
-                                ansettelsesperioder =
-                                    listOf(
-                                        SpleisMedlemskapsvurdering.SpleisArbeidstaker.Ansettelsesperiode(ansattFom, null),
-                                    ),
-                            ),
-                        ),
-                ),
+    @Test
+    fun `tar vare på medlemskapsstatusen fra spleis og regner infotrygd som medlem`() {
+        val fraSpleis = vurdering(Medlemskapsstatus.Nei)
+        val fraInfotrygd =
+            SpleisMedlemskapsvurdering.Infotrygd(
+                medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
+                opprettet = Instant.now(),
+                skjæringstidspunkt = LocalDate.of(2025, 1, 1),
             )
+        spleisSvar = listOf(fraSpleis, fraInfotrygd)
 
-        assertEquals(1, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
-        assertEquals(1, transaksjon.medlemskapsvurderinger.antallLagringer)
-        val lagret = transaksjon.medlemskapsvurderinger.alleVurderinger.single() as Medlemskapsvurdering.OverførtFraSpleis
-        val kilde = lagret.vilkårsvurderinger.single().kilde as Vurderingskilde.OverførtFraSpleis
-        val grunnlag = kilde.grunnlag as Medlemskapsgrunnlag.Arbeidstaker
-        assertEquals(
-            listOf(
-                Arbeidsforhold(
-                    orgnummer = forventetOrgnummer,
-                    ansattFom = ansattFom,
-                    ansattTom = null,
-                    type = Arbeidsforhold.Arbeidsforholdtype.UKJENT,
-                ),
-            ),
-            grunnlag.arbeidsforhold,
-        )
+        assertEquals(2, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
+
+        val spleis = transaksjon.medlemskapsvurderinger.finn(fraSpleis.medlemskapsvurderingId)!!
+        assertEquals(Medlemskapsstatus.Nei, spleis.status)
+        assertEquals(Vurderingskilde.OverførtFraSpleis, spleis.kilde)
+        assertEquals(fraSpleis.opprettet, spleis.vurdertTidspunkt)
+        val infotrygd = transaksjon.medlemskapsvurderinger.finn(fraInfotrygd.medlemskapsvurderingId)!!
+        assertEquals(Medlemskapsstatus.Ja, infotrygd.status)
+        assertEquals(Vurderingskilde.OverførtFraInfotrygd, infotrygd.kilde)
     }
 
     @Test
@@ -147,12 +113,11 @@ internal class PersonAvstemmingServiceTest {
     fun `feiler hvis vurderings-ID allerede tilhører en annen person`() {
         val spleisVurdering = vurdering()
         transaksjon.medlemskapsvurderinger.lagre(
-            Medlemskapsvurdering.fraInfotrygd(
+            Medlemskapsvurdering.overførtFraInfotrygd(
                 id = spleisVurdering.medlemskapsvurderingId,
-                vurdertTidspunkt = spleisVurdering.opprettet,
                 fødselsnummer = ET_ANNET_FØDSELSNUMMER,
                 skjæringstidspunkt = spleisVurdering.skjæringstidspunkt,
-                erOk = true,
+                vurdertTidspunkt = spleisVurdering.opprettet,
             ),
         )
         spleisSvar = listOf(spleisVurdering)
@@ -202,11 +167,12 @@ internal class PersonAvstemmingServiceTest {
         assertEquals(0, transaksjon.migreringslogg.alleNedlastinger.size)
     }
 
-    private fun vurdering() =
-        SpleisMedlemskapsvurdering.SpleisSelvstendig(
+    private fun vurdering(status: Medlemskapsstatus = Medlemskapsstatus.Ja) =
+        SpleisMedlemskapsvurdering.Spleis(
             medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
             opprettet = Instant.now(),
             skjæringstidspunkt = LocalDate.of(2026, 1, 1),
+            status = status,
         )
 
     private companion object {

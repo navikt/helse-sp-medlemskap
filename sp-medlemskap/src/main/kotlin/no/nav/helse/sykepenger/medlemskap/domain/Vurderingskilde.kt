@@ -1,10 +1,13 @@
 package no.nav.helse.sykepenger.medlemskap.domain
 
+import no.nav.helse.Periode
+
+/** Hvor en [Medlemskapsvurdering] kommer fra. */
 internal sealed interface Vurderingskilde {
+    /** Vurdert av sp-medlemskap ut fra svaret fra medlemskapstjenesten for [oppslagsperiode]. */
     data class Automatisk(
         val medlemskapsprøvingId: MedlemskapsprøvingId,
-        val grunnlag: Medlemskapsgrunnlag,
-        val utledetFakta: UtledetFakta,
+        val oppslagsperiode: Periode,
         val versjonAvKildekode: String,
     ) : Vurderingskilde
 
@@ -14,8 +17,7 @@ internal sealed interface Vurderingskilde {
         val journalpostId: List<String>,
     ) : Vurderingskilde
 
-    data class OverførtFraSpleis(
-        val grunnlag: Medlemskapsgrunnlag,
-        val utledetFakta: UtledetFakta,
-    ) : Vurderingskilde
+    data object OverførtFraSpleis : Vurderingskilde
+
+    data object OverførtFraInfotrygd : Vurderingskilde
 }

@@ -86,7 +86,7 @@ class VilkårsvurderingerForPersonOpenApiTest {
         }
 
     /**
-     * Kilde- og grunnlagsvariantene er unioner, og en union uten diskriminator er ubrukelig for en
+     * Kildevariantene er unioner, og en union uten diskriminator er ubrukelig for en
      * konsument som genererer typer fra spec-en: variantene ville ikke vært til å skille fra
      * hverandre.
      *
@@ -104,13 +104,10 @@ class VilkårsvurderingerForPersonOpenApiTest {
                     .readTree(client.get("/api/openapi.json").bodyAsText())["components"]["schemas"]
 
             listOf(
-                "ApiMedlemskapsvurdering.VurdertISpVilkarproving" to "kravkilde",
-                "ApiMedlemskapsvurdering.OverførtFraSpleis" to "kravkilde",
-                "ApiMedlemskapsvurdering.OverførtFraInfotrygd" to "kravkilde",
                 "ApiVurderingskilde.Automatisk" to "kildetype",
                 "ApiVurderingskilde.Saksbehandler" to "kildetype",
-                "ApiVurderingsgrunnlag.Arbeidsforhold" to "grunnlagstype",
-                "ApiVurderingsgrunnlag.SelvstendigNæringsdrivende" to "grunnlagstype",
+                "ApiVurderingskilde.OverførtFraSpleis" to "kildetype",
+                "ApiVurderingskilde.OverførtFraInfotrygd" to "kildetype",
                 "ApiVisningsfelt.Tekst" to "type",
                 "ApiVisningsfelt.Liste" to "type",
             ).forEach { (skjema, diskriminator) ->

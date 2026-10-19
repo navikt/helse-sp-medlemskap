@@ -1,22 +1,16 @@
 package no.nav.helse.sykepenger.medlemskap.infra.db
 
-import no.nav.helse.januar
-import no.nav.helse.sykepenger.medlemskap.domain.Arbeidsforhold
-import no.nav.helse.sykepenger.medlemskap.domain.Arbeidsforhold.Arbeidsforholdtype.ORDINÆRT
-import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsgrunnlag
+import no.nav.helse.februar
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
+import no.nav.helse.til
 import java.time.LocalDate
 
 internal const val FØDSELSNUMMER = "12029240045"
-internal const val ORGNUMMER = "987654321"
+internal const val ANNET_FØDSELSNUMMER = "12029240046"
 
-internal fun arbeidstakergrunnlag(vararg arbeidsforhold: Arbeidsforhold) =
-    Medlemskapsgrunnlag.Arbeidstaker(
-        arbeidsforhold.toList().ifEmpty { listOf(arbeidsforhold(ansattFom = 1.januar, ansattTom = 31.januar)) },
-    )
+internal val OPPSLAGSPERIODE = 1.februar til 28.februar
 
-internal fun arbeidsforhold(
-    orgnummer: String = ORGNUMMER,
-    ansattFom: LocalDate,
-    ansattTom: LocalDate? = null,
-    type: Arbeidsforhold.Arbeidsforholdtype = ORDINÆRT,
-) = Arbeidsforhold(orgnummer = orgnummer, ansattFom = ansattFom, ansattTom = ansattTom, type = type)
+internal fun nyPrøving(
+    fødselsnummer: String = FØDSELSNUMMER,
+    skjæringstidspunkt: LocalDate = 1.februar,
+) = Medlemskapsprøving.start(fødselsnummer, skjæringstidspunkt, OPPSLAGSPERIODE)

@@ -19,6 +19,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureResources
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.get
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
+import no.nav.helse.til
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
@@ -33,7 +34,7 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
     private val skjæringstidspunkt = LocalDate.of(2024, 1, 1)
 
     @Test
-    fun `viser alle fire feltene i riktig rekkefoelge`() =
+    fun `viser alle tre feltene i riktig rekkefoelge`() =
         testApplication {
             val vurdering =
                 manuellVurdering(
@@ -46,13 +47,12 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
 
             assertEquals(HttpStatusCode.OK, response.status)
             val felter = response.json()["felter"]
-            assertEquals(4, felter.size())
-            assertTekst(felter[0], "Vilkår", "Arbeid i minst 4 uker")
-            assertTekst(felter[1], "Utfall", "Oppfylt")
-            assertTekst(felter[2], "Begrunnelse", "Fritekst fra saksbehandler\nmed linjeskift")
-            assertEquals("LISTE", felter[3]["type"].asString())
-            assertEquals("Journalposter", felter[3]["tittel"].asString())
-            assertEquals(listOf("598373838", "598373839"), felter[3]["elementer"].values().map { it.asString() })
+            assertEquals(3, felter.size())
+            assertTekst(felter[0], "Medlemskap", "Medlem i folketrygden")
+            assertTekst(felter[1], "Begrunnelse", "Fritekst fra saksbehandler\nmed linjeskift")
+            assertEquals("LISTE", felter[2]["type"].asString())
+            assertEquals("Journalposter", felter[2]["tittel"].asString())
+            assertEquals(listOf("598373838", "598373839"), felter[2]["elementer"].values().map { it.asString() })
         }
 
     @Test
@@ -65,46 +65,18 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
 
             assertEquals(HttpStatusCode.OK, response.status)
             val felter = response.json()["felter"]
-            assertEquals(listOf("Vilkår", "Utfall", "Begrunnelse"), felter.values().map { it["tittel"].asString() })
+            assertEquals(listOf("Medlemskap", "Begrunnelse"), felter.values().map { it["tittel"].asString() })
         }
 
     @Test
-    fun `ikke oppfylt vises som Ikke oppfylt`() =
+    fun `nei vises som ikke medlem`() =
         testApplication {
-            val vurdering = manuellVurdering(utfall = Utfall.IkkeOppfylt)
+            val vurdering = manuellVurdering(status = Medlemskapsstatus.Nei)
             val pseudoId = settOpp(lagret = listOf(vurdering))
 
             val response = client.get(url(pseudoId, vurdering.id.value))
 
-            assertTekst(response.json()["felter"][1], "Utfall", "Ikke oppfylt")
-        }
-
-    @Test
-    fun `viser nyeste manuelle vurdering naar flere er med`() =
-        testApplication {
-            val eldre = Vilkårsvurdering.avSaksbehandler(
-                Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                Utfall.IkkeOppfylt,
-                "Z1",
-                "eldre"
-            )
-            val nyere =
-                Vilkårsvurdering
-                    .avSaksbehandler(Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER, Utfall.Oppfylt, "Z1", "nyere")
-                    .copy(vurdertTidspunkt = eldre.vurdertTidspunkt.plusSeconds(60))
-            val vurdering =
-                Medlemskapsvurdering.VurdertISpVilkårsprøving.med(
-                    fødselsnummer = identitetsnummer.value,
-                    skjæringstidspunkt = skjæringstidspunkt,
-                    kategori = Kategori.Arbeidstaker,
-                    vilkårsvurderinger = listOf(nyere, eldre),
-                )
-            val pseudoId = settOpp(lagret = listOf(vurdering))
-
-            val felter = client.get(url(pseudoId, vurdering.id.value)).json()["felter"]
-
-            assertTekst(felter[1], "Utfall", "Oppfylt")
-            assertTekst(felter[2], "Begrunnelse", "nyere")
+            assertTekst(response.json()["felter"][0], "Medlemskap", "Ikke medlem i folketrygden")
         }
 
     @Test
@@ -133,15 +105,12 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
         }
 
     @Test
-    fun `bare automatisk vurdering gir 404`() =
+    fun `automatisk vurdering gir 404`() =
         testApplication {
             val vurdering =
-                Medlemskapsvurdering.automatisk(
-                    medlemskapsprøvingId = MedlemskapsprøvingId.ny(),
-                    fødselsnummer = identitetsnummer.value,
-                    skjæringstidspunkt = skjæringstidspunkt,
-                    grunnlag = Medlemskapsgrunnlag.SelvstendigNæringsdrivende,
-                )
+                Medlemskapsprøving
+                    .start(identitetsnummer.value, skjæringstidspunkt, skjæringstidspunkt til skjæringstidspunkt)
+                    .motta(Medlemskapsstatus.Ja)
             val pseudoId = settOpp(lagret = listOf(vurdering))
 
             val response = client.get(url(pseudoId, vurdering.id.value))
@@ -153,10 +122,10 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
     fun `vurdering overfoert fra infotrygd gir 404`() =
         testApplication {
             val vurdering =
-                Medlemskapsvurdering.fraInfotrygd(
+                Medlemskapsvurdering.overførtFraInfotrygd(
+                    id = MedlemskapsvurderingId.ny(),
                     fødselsnummer = identitetsnummer.value,
                     skjæringstidspunkt = skjæringstidspunkt,
-                    erOk = true,
                     vurdertTidspunkt = Instant.now(),
                 )
             val pseudoId = settOpp(lagret = listOf(vurdering))
@@ -247,7 +216,7 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
                 SaksbehandlerPrincipal(saksbehandler, tilganger, AccessToken("token")),
                 transaksjonProvider,
                 tilgangskontroll,
-                pseudoIdProvider
+                pseudoIdProvider,
             )
         }
         return pseudoId.toString()
@@ -277,20 +246,16 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
 
     private fun manuellVurdering(
         fødselsnummer: String = identitetsnummer.value,
-        utfall: Utfall = Utfall.Oppfylt,
+        status: Medlemskapsstatus = Medlemskapsstatus.Ja,
         fritekstbegrunnelse: String = "Begrunnelse",
         journalpostId: List<String> = listOf("598373838"),
     ) = Medlemskapsvurdering.avSaksbehandler(
         fødselsnummer = fødselsnummer,
         skjæringstidspunkt = skjæringstidspunkt,
-        vilkårsvurdering =
-            Vilkårsvurdering.avSaksbehandler(
-                vilkårskode = Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                utfall = utfall,
-                saksbehandlerIdent = "Z999999",
-                fritekstbegrunnelse = fritekstbegrunnelse,
-                journalpostId = journalpostId,
-            ),
+        status = status,
+        saksbehandlerIdent = "Z999999",
+        fritekstbegrunnelse = fritekstbegrunnelse,
+        journalpostId = journalpostId,
     )
 }
 
@@ -301,8 +266,7 @@ private fun url(
 
 private suspend fun HttpResponse.json(): JsonNode = jacksonObjectMapper().readTree(bodyAsText())
 
-private fun JsonNode.utenInstance(): Map<String, String> =
-    properties().filter { it.key != "instance" }.associate { it.key to it.value.toString() }
+private fun JsonNode.utenInstance(): Map<String, String> = properties().filter { it.key != "instance" }.associate { it.key to it.value.toString() }
 
 private fun assertTekst(
     felt: JsonNode,

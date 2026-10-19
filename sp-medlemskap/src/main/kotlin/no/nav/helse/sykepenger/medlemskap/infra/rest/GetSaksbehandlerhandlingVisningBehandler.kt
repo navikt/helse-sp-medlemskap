@@ -2,11 +2,8 @@ package no.nav.helse.sykepenger.medlemskap.infra.rest
 
 import com.github.navikt.tbd_libs.personpseudoid.PersonPseudoId
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
-import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
-import no.nav.helse.sykepenger.medlemskap.domain.Utfall
-import no.nav.helse.sykepenger.medlemskap.domain.Vilkårskode
-import no.nav.helse.sykepenger.medlemskap.domain.Vilkårsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.Tilgang
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.GetBehandler
@@ -49,42 +46,29 @@ internal class GetSaksbehandlerhandlingVisningBehandler :
                     ?.takeIf { it.fødselsnummer == identitetsnummer.value }
                     ?: return@medPerson ikkeFunnet
 
-            val manuellVurdering = vurdering.nyesteManuelleVilkårsvurdering() ?: return@medPerson ikkeFunnet
+            val kilde = vurdering.kilde as? Vurderingskilde.Saksbehandler ?: return@medPerson ikkeFunnet
 
-            RestResponse.ok(ApiSaksbehandlerhandlingVisningResponse(felter = manuellVurdering.tilVisningsfelter()))
+            RestResponse.ok(ApiSaksbehandlerhandlingVisningResponse(felter = tilVisningsfelter(vurdering.status, kilde)))
         }
     }
 }
 
-// Tidligere manuelle vurderinger følger med inn i en ny medlemskapsvurdering, så den nyeste er den denne handlingen laget.
-private fun Medlemskapsvurdering.nyesteManuelleVilkårsvurdering(): ManuellVilkårsvurdering? =
-    (this as? Medlemskapsvurdering.MedVilkårsvurderinger)
-        ?.vilkårsvurderinger
-        ?.mapNotNull { vurdering -> (vurdering.kilde as? Vurderingskilde.Saksbehandler)?.let { ManuellVilkårsvurdering(vurdering, it) } }
-        ?.maxByOrNull { it.vilkårsvurdering.vurdertTidspunkt }
-
-private data class ManuellVilkårsvurdering(
-    val vilkårsvurdering: Vilkårsvurdering,
-    val kilde: Vurderingskilde.Saksbehandler,
-)
-
-private fun ManuellVilkårsvurdering.tilVisningsfelter(): List<ApiVisningsfelt> =
+private fun tilVisningsfelter(
+    status: Medlemskapsstatus,
+    kilde: Vurderingskilde.Saksbehandler,
+): List<ApiVisningsfelt> =
     buildList {
-        add(ApiVisningsfelt.Tekst(tittel = "Vilkår", tekst = vilkårsvurdering.vilkårskode.visningsnavn()))
-        add(ApiVisningsfelt.Tekst(tittel = "Utfall", tekst = vilkårsvurdering.utfall.visningsnavn()))
+        add(ApiVisningsfelt.Tekst(tittel = "Medlemskap", tekst = status.visningsnavn()))
         add(ApiVisningsfelt.Tekst(tittel = "Begrunnelse", tekst = kilde.fritekstbegrunnelse))
         if (kilde.journalpostId.isNotEmpty()) {
             add(ApiVisningsfelt.Liste(tittel = "Journalposter", elementer = kilde.journalpostId))
         }
     }
 
-private fun Vilkårskode.visningsnavn(): String =
+private fun Medlemskapsstatus.visningsnavn(): String =
     when (this) {
-        Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER -> "Arbeid i minst 4 uker"
-    }
-
-private fun Utfall.visningsnavn(): String =
-    when (this) {
-        Utfall.Oppfylt -> "Oppfylt"
-        Utfall.IkkeOppfylt -> "Ikke oppfylt"
+        Medlemskapsstatus.Ja -> "Medlem i folketrygden"
+        Medlemskapsstatus.Nei -> "Ikke medlem i folketrygden"
+        Medlemskapsstatus.Uavklart -> "Uavklart"
+        Medlemskapsstatus.UavklartMedBrukerspørsmål -> "Uavklart med brukerspørsmål"
     }

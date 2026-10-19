@@ -16,84 +16,15 @@ internal data class ApiVilkårsvurderingerForPersonResponse(
     val krav: List<ApiMedlemskapsvurdering>,
 )
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "kravkilde", visible = true)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = ApiMedlemskapsvurdering.VurdertISpVilkarproving::class, name = "VURDERT_I_SP_medlemskap"),
-    JsonSubTypes.Type(value = ApiMedlemskapsvurdering.OverførtFraSpleis::class, name = "OVERFORT_FRA_SPLEIS"),
-    JsonSubTypes.Type(value = ApiMedlemskapsvurdering.OverførtFraInfotrygd::class, name = "OVERFOERT_FRA_INFOTRYGD"),
-)
 @Serializable
-internal sealed interface ApiMedlemskapsvurdering {
-    val id: UUID
-    val kravkode: ApiKravkode
-    val medlemskapOk: Boolean
-
-    val kravkilde: ApiKravkilde
-
-    @Serializable
-    data class VurdertISpVilkarproving(
-        override val id: UUID,
-        override val kravkode: ApiKravkode,
-        override val medlemskapOk: Boolean,
-        val avgjørendeVilkårskode: ApiVilkårskode?,
-        val vurderinger: List<ApiVilkårsvurdering>,
-    ) : ApiMedlemskapsvurdering {
-        override val kravkilde: ApiKravkilde = ApiKravkilde.VURDERT_I_SP_medlemskap
-    }
-
-    @Serializable
-    data class OverførtFraSpleis(
-        override val id: UUID,
-        override val kravkode: ApiKravkode,
-        override val medlemskapOk: Boolean,
-        val avgjørendeVilkårskode: ApiVilkårskode?,
-        val vurderinger: List<ApiVilkårsvurdering>,
-    ) : ApiMedlemskapsvurdering {
-        override val kravkilde: ApiKravkilde = ApiKravkilde.OVERFORT_FRA_SPLEIS
-    }
-
-    @Serializable
-    data class OverførtFraInfotrygd(
-        override val id: UUID,
-        override val kravkode: ApiKravkode,
-        override val medlemskapOk: Boolean,
-    ) : ApiMedlemskapsvurdering {
-        override val kravkilde: ApiKravkilde = ApiKravkilde.OVERFOERT_FRA_INFOTRYGD
-    }
-}
-
-@Serializable
-internal enum class ApiKravkilde {
-    VURDERT_I_SP_medlemskap,
-    OVERFORT_FRA_SPLEIS,
-    OVERFOERT_FRA_INFOTRYGD,
-}
-
-@Serializable
-internal data class ApiVilkårsvurdering(
+internal data class ApiMedlemskapsvurdering(
     val id: UUID,
-    val vilkårskode: ApiVilkårskode,
-    val utfall: ApiUtfall,
+    val kravkode: ApiKravkode,
+    val medlemskapOk: Boolean,
+    val status: ApiMedlemskapsstatus,
     val vurdertTidspunkt: Instant,
-    val lovreferanse: ApiLovreferanse,
     val kilde: ApiVurderingskilde,
 )
-
-@Serializable
-internal data class ApiLovreferanse(
-    val lov: String,
-    val paragraf: String,
-    val avsnitt: Int?,
-    val setning: Int?,
-    val bokstav: String?,
-    val iKraftFra: LocalDate,
-)
-
-@Serializable
-internal enum class ApiUtfall {
-    OPPFYLT,
-    IKKE_OPPFYLT,
-}
 
 @Serializable
 internal enum class ApiKravkode {
@@ -101,8 +32,11 @@ internal enum class ApiKravkode {
 }
 
 @Serializable
-internal enum class ApiVilkårskode {
-    MEDLEMSKAP_ARBEID_MINST_4_UKER,
+internal enum class ApiMedlemskapsstatus {
+    JA,
+    NEI,
+    UAVKLART,
+    UAVKLART_MED_BRUKERSPORSMAAL,
 }
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "kildetype", visible = true)
@@ -110,15 +44,17 @@ internal enum class ApiVilkårskode {
     JsonSubTypes.Type(value = ApiVurderingskilde.Automatisk::class, name = "AUTOMATISK"),
     JsonSubTypes.Type(value = ApiVurderingskilde.Saksbehandler::class, name = "SAKSBEHANDLER"),
     JsonSubTypes.Type(value = ApiVurderingskilde.OverførtFraSpleis::class, name = "OVERFOERT_FRA_SPLEIS"),
+    JsonSubTypes.Type(value = ApiVurderingskilde.OverførtFraInfotrygd::class, name = "OVERFOERT_FRA_INFOTRYGD"),
 )
 @Serializable
 internal sealed interface ApiVurderingskilde {
     val kildetype: ApiKildetype
 
+    /** Vurdert ut fra svaret fra medlemskapstjenesten for [oppslagsperiode]. */
     @Serializable
     data class Automatisk(
         val versjonAvKildekode: String,
-        val grunnlag: ApiVurderingsgrunnlag,
+        val oppslagsperiode: ApiPeriode,
     ) : ApiVurderingskilde {
         override val kildetype: ApiKildetype = ApiKildetype.AUTOMATISK
     }
@@ -134,9 +70,20 @@ internal sealed interface ApiVurderingskilde {
 
     @Serializable
     data class OverførtFraSpleis(
-        val grunnlag: ApiVurderingsgrunnlag,
+        override val kildetype: ApiKildetype = ApiKildetype.OVERFOERT_FRA_SPLEIS,
     ) : ApiVurderingskilde {
-        override val kildetype: ApiKildetype = ApiKildetype.OVERFOERT_FRA_SPLEIS
+        init {
+            require(kildetype == ApiKildetype.OVERFOERT_FRA_SPLEIS) { "Diskriminatoren må stemme med varianten" }
+        }
+    }
+
+    @Serializable
+    data class OverførtFraInfotrygd(
+        override val kildetype: ApiKildetype = ApiKildetype.OVERFOERT_FRA_INFOTRYGD,
+    ) : ApiVurderingskilde {
+        init {
+            require(kildetype == ApiKildetype.OVERFOERT_FRA_INFOTRYGD) { "Diskriminatoren må stemme med varianten" }
+        }
     }
 }
 
@@ -145,40 +92,7 @@ internal enum class ApiKildetype {
     AUTOMATISK,
     SAKSBEHANDLER,
     OVERFOERT_FRA_SPLEIS,
-}
-
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.EXISTING_PROPERTY, property = "grunnlagstype", visible = true)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = ApiVurderingsgrunnlag.Arbeidsforhold::class, name = "ARBEIDSFORHOLD"),
-    JsonSubTypes.Type(value = ApiVurderingsgrunnlag.SelvstendigNæringsdrivende::class, name = "SELVSTENDIG_NAERINGSDRIVENDE"),
-)
-@Serializable
-internal sealed interface ApiVurderingsgrunnlag {
-    val grunnlagstype: ApiGrunnlagstype
-
-    @Serializable
-    data class Arbeidsforhold(
-        val arbeidsforhold: List<ApiArbeidsforhold>,
-        val medlemskapsperiode: ApiPeriode?,
-        val medlemskapsdager: Int,
-    ) : ApiVurderingsgrunnlag {
-        override val grunnlagstype: ApiGrunnlagstype = ApiGrunnlagstype.ARBEIDSFORHOLD
-    }
-
-    @Serializable
-    data class SelvstendigNæringsdrivende(
-        override val grunnlagstype: ApiGrunnlagstype = ApiGrunnlagstype.SELVSTENDIG_NAERINGSDRIVENDE,
-    ) : ApiVurderingsgrunnlag {
-        init {
-            require(grunnlagstype == ApiGrunnlagstype.SELVSTENDIG_NAERINGSDRIVENDE) { "Diskriminatoren må stemme med varianten" }
-        }
-    }
-}
-
-@Serializable
-internal enum class ApiGrunnlagstype {
-    ARBEIDSFORHOLD,
-    SELVSTENDIG_NAERINGSDRIVENDE,
+    OVERFOERT_FRA_INFOTRYGD,
 }
 
 @Serializable
@@ -186,20 +100,3 @@ internal data class ApiPeriode(
     val fom: LocalDate,
     val tom: LocalDate,
 )
-
-@Serializable
-internal data class ApiArbeidsforhold(
-    val organisasjonsnummer: String,
-    val fom: LocalDate,
-    val tom: LocalDate?,
-    val type: ApiArbeidsforholdtype,
-)
-
-@Serializable
-internal enum class ApiArbeidsforholdtype {
-    FORENKLET_OPPGJØRSORDNING,
-    FRILANSER,
-    MARITIMT,
-    ORDINÆRT,
-    UKJENT,
-}

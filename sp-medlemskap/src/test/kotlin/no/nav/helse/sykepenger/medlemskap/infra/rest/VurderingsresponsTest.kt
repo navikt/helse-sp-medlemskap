@@ -1,175 +1,89 @@
 package no.nav.helse.sykepenger.medlemskap.infra.rest
 
-import no.nav.helse.Periode
 import no.nav.helse.februar
 import no.nav.helse.januar
-import no.nav.helse.sykepenger.medlemskap.domain.*
-import no.nav.helse.sykepenger.medlemskap.domain.Arbeidsforhold.Arbeidsforholdtype.ORDINÆRT
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
+import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.til
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import java.time.Instant
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
 internal class VurderingsresponsTest {
     @Test
-    fun `arbeidstakerresponsen inneholder vurdert medlemskapsperiode og medlemskapsdager`() {
-        val vurdering = automatiskArbeidstakervurdering(4.januar til 31.januar)
+    fun `automatisk vurdering viser oppslagsperioden`() {
+        val vurdering = Medlemskapsprøving.start(FNR, 1.februar, 1.januar til 31.januar).motta(Medlemskapsstatus.Ja, "versjon")
 
-        val grunnlag = Vurderingsrespons.fra(vurdering).enesteVurdering().automatiskGrunnlag()
-
-        assertEquals(4.januar, grunnlag.medlemskapsperiode?.fom)
-        assertEquals(31.januar, grunnlag.medlemskapsperiode?.tom)
-        assertEquals(28, grunnlag.medlemskapsdager)
-    }
-
-    @Test
-    fun `skjaeringstidspunktet ligger på rota, ikke per medlemskapsvurdering`() {
-        val respons = Vurderingsrespons.fra(automatiskArbeidstakervurdering(4.januar til 31.januar))
+        val respons = Vurderingsrespons.fra(vurdering)
 
         assertEquals(1.februar, respons.skjæringstidspunkt)
-    }
-
-    @Test
-    fun `medlemskapsvurderingen peker på vilkaaret som avgjorde det`() {
-        val respons = Vurderingsrespons.fra(automatiskArbeidstakervurdering(4.januar til 31.januar))
-        val krav = respons.krav.single() as ApiMedlemskapsvurdering.VurdertISpVilkarproving
-
+        val krav = respons.krav.single()
+        assertEquals(vurdering.id.value, krav.id)
         assertEquals(ApiKravkode.MEDLEMSKAP, krav.kravkode)
-        assertTrue(krav.medlemskapOk)
-        assertEquals(ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER, krav.avgjørendeVilkårskode)
-        assertEquals(listOf(krav.avgjørendeVilkårskode), krav.vurderinger.map { it.vilkårskode })
+        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), krav.kilde)
     }
 
-    @Test
-    fun `vilkaarskode og utfall er to uavhengige akser`() {
-        val forKortMedlemskap = automatiskArbeidstakervurdering(29.januar til 31.januar)
-
-        val vurdering = Vurderingsrespons.fra(forKortMedlemskap).enesteVurdering()
-
-        assertEquals(ApiUtfall.IKKE_OPPFYLT, vurdering.utfall)
-        assertEquals(ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER, vurdering.vilkårskode)
-        assertEquals(ApiLovreferanse("folketrygdloven", "8-2", 1, 1, null, 1.januar(2004)), vurdering.lovreferanse)
-    }
-
-    @Test
-    fun `manuell vurdering har saksbehandler som kilde og ikke noe grunnlag`() {
-        val vilkårsvurdering =
-            Vilkårsvurdering.avSaksbehandler(
-                vilkårskode = Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                utfall = Utfall.Oppfylt,
-                saksbehandlerIdent = "Z999999",
-                fritekstbegrunnelse = "Mottok foreldrepenger fram til skjæringstidspunktet.",
-                journalpostId = listOf("journalpost-1", "journalpost-2"),
-            )
-        val vurdering =
-            Medlemskapsvurdering.avSaksbehandler(
-                fødselsnummer = "12345678901",
-                skjæringstidspunkt = 1.februar,
-                vilkårsvurdering = vilkårsvurdering,
-            )
-
-        val api = Vurderingsrespons.fra(vurdering).enesteVurdering()
-        val kilde = api.kilde as ApiVurderingskilde.Saksbehandler
-
-        assertEquals(ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER, api.vilkårskode)
-        assertEquals(ApiLovreferanse("folketrygdloven", "8-2", 1, 1, null, 1.januar(2004)), api.lovreferanse)
-        assertEquals("Z999999", kilde.ident)
-        assertEquals(listOf("journalpost-1", "journalpost-2"), kilde.journalpostId)
-    }
-
-    @Test
-    fun `unntaksvilkår er en helt vanlig vilkårsvurdering`() {
-        val vilkårsvurdering =
-            Vilkårsvurdering.avSaksbehandler(
-                vilkårskode = Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                utfall = Utfall.IkkeOppfylt,
-                saksbehandlerIdent = "Z999999",
-                fritekstbegrunnelse = "Ingen AAP forut for foreldrepengeperioden.",
-            )
-        val vurdering =
-            Medlemskapsvurdering.avSaksbehandler(
-                fødselsnummer = "12345678901",
-                skjæringstidspunkt = 1.februar,
-                vilkårsvurdering = vilkårsvurdering,
-            )
-
-        val api = Vurderingsrespons.fra(vurdering).enesteVurdering()
-
-        assertEquals(ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER, api.vilkårskode)
-        assertEquals(ApiUtfall.IKKE_OPPFYLT, api.utfall)
-    }
-
-    @Test
-    fun `infotrygdvurdering blir en medlemskapsvurdering uten enkeltvurderinger`() {
-        val vurdering =
-            Medlemskapsvurdering.fraInfotrygd(
-                fødselsnummer = "12345678901",
-                skjæringstidspunkt = 1.februar,
-                erOk = true,
-                vurdertTidspunkt = Instant.now(),
-            )
+    @ParameterizedTest
+    @CsvSource(
+        "Ja, JA, true",
+        "Nei, NEI, false",
+        "Uavklart, UAVKLART, true",
+        "UavklartMedBrukerspørsmål, UAVKLART_MED_BRUKERSPORSMAAL, true",
+    )
+    fun `status og ok`(
+        status: Medlemskapsstatus,
+        forventetStatus: ApiMedlemskapsstatus,
+        forventetOk: Boolean,
+    ) {
+        val vurdering = Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FNR, 1.februar, status, Instant.now())
 
         val krav = Vurderingsrespons.fra(vurdering).krav.single()
 
-        assertInstanceOf(ApiMedlemskapsvurdering.OverførtFraInfotrygd::class.java, krav)
-        assertEquals(ApiKravkode.MEDLEMSKAP, krav.kravkode)
-        assertTrue(krav.medlemskapOk)
+        assertEquals(forventetStatus, krav.status)
+        assertEquals(forventetOk, krav.medlemskapOk)
+        assertEquals(ApiVurderingskilde.OverførtFraSpleis(), krav.kilde)
     }
 
     @Test
-    fun `spleisvurdering blir en medlemskapsvurdering med spleis som kilde`() {
-        val vurdering =
-            Medlemskapsvurdering.overførtFraSpleis(
-                id = MedlemskapsvurderingId.ny(),
-                fødselsnummer = "12345678901",
-                skjæringstidspunkt = 1.februar,
-                vilkårsvurderinger =
-                    listOf(
-                        Vilkårsvurdering.overførtFraSpleis(
-                            vilkårskode = Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                            vurdertTidspunkt = Instant.now(),
-                            utfall = Utfall.Oppfylt,
-                            grunnlag = Medlemskapsgrunnlag.SelvstendigNæringsdrivende,
-                            utledetFakta = UtledetFakta.Ingen,
-                        ),
-                    ),
-            )
+    fun `manuell vurdering har saksbehandler som kilde`() {
+        val vurdering = Medlemskapsvurdering.avSaksbehandler(FNR, 1.februar, Medlemskapsstatus.Nei, "A123456", "Begrunnelse", listOf("1"))
 
         val krav = Vurderingsrespons.fra(vurdering).krav.single()
 
-        assertInstanceOf(ApiMedlemskapsvurdering.OverførtFraSpleis::class.java, krav)
-        assertEquals(ApiKravkilde.OVERFORT_FRA_SPLEIS, krav.kravkilde)
+        assertEquals(ApiVurderingskilde.Saksbehandler("A123456", "Begrunnelse", listOf("1")), krav.kilde)
+        assertEquals(vurdering.vurdertTidspunkt, krav.vurdertTidspunkt)
     }
 
     @Test
-    fun `selvstendig naeringsdrivende gir grunnlag uten arbeidsforhold`() {
-        val vurdering =
-            Medlemskapsvurdering.automatisk(
-                medlemskapsprøvingId = MedlemskapsprøvingId.ny(),
-                fødselsnummer = "12345678901",
-                skjæringstidspunkt = 1.februar,
-                grunnlag = Medlemskapsgrunnlag.SelvstendigNæringsdrivende,
-            )
+    fun `infotrygd vises som overført fra infotrygd`() {
+        val vurdering = Medlemskapsvurdering.overførtFraInfotrygd(MedlemskapsvurderingId.ny(), FNR, 1.februar, Instant.now())
 
-        val kilde = Vurderingsrespons.fra(vurdering).enesteVurdering().kilde as ApiVurderingskilde.Automatisk
-
-        assertEquals(ApiVurderingsgrunnlag.SelvstendigNæringsdrivende(), kilde.grunnlag)
-    }
-
-    private fun automatiskArbeidstakervurdering(ansettelseperiode: Periode) =
-        Medlemskapsvurdering.automatisk(
-            medlemskapsprøvingId = MedlemskapsprøvingId.ny(),
-            fødselsnummer = "12345678901",
-            skjæringstidspunkt = 1.februar,
-            grunnlag =
-                Medlemskapsgrunnlag.Arbeidstaker(
-                    listOf(Arbeidsforhold(orgnummer = "987654321", ansettelseperiode = ansettelseperiode, type = ORDINÆRT)),
-                ),
+        assertEquals(
+            ApiVurderingskilde.OverførtFraInfotrygd(),
+            Vurderingsrespons
+                .fra(vurdering)
+                .krav
+                .single()
+                .kilde,
         )
+    }
+
+    @Test
+    fun `historikken beholder rekkefølgen den får`() {
+        val nyest = Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FNR, 1.februar, Medlemskapsstatus.Ja, Instant.now())
+        val eldst = Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FNR, 1.februar, Medlemskapsstatus.Nei, Instant.EPOCH)
+
+        val historikk = Vurderingsrespons.historikk(1.februar, listOf(nyest, eldst))
+
+        assertEquals(listOf(nyest.id.value, eldst.id.value), historikk.historikk.map { it.medlemskapsvurdering.id })
+        assertEquals(listOf(nyest.vurdertTidspunkt, eldst.vurdertTidspunkt), historikk.historikk.map { it.vurdertTidspunkt })
+    }
+
+    private companion object {
+        const val FNR = "12029240045"
+    }
 }
-
-private fun ApiVilkårsvurderingerForPersonResponse.enesteVurdering() = (krav.single() as ApiMedlemskapsvurdering.VurdertISpVilkarproving).vurderinger.single()
-
-private fun ApiVilkårsvurdering.automatiskGrunnlag() = (kilde as ApiVurderingskilde.Automatisk).grunnlag as ApiVurderingsgrunnlag.Arbeidsforhold

@@ -3,6 +3,7 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
@@ -25,10 +26,11 @@ internal class PersonAvstemmingRiverTest {
                             object : ISpleisClient {
                                 override fun hentMedlemskapsvurderinger(fødselsnummer: String) =
                                     listOf(
-                                        SpleisMedlemskapsvurdering.SpleisSelvstendig(
+                                        SpleisMedlemskapsvurdering.Spleis(
                                             medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
                                             opprettet = Instant.now(),
                                             skjæringstidspunkt = LocalDate.of(2026, 1, 1),
+                                            status = Medlemskapsstatus.Ja,
                                         ),
                                     )
                             },

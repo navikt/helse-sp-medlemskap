@@ -14,6 +14,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.infra.db.Database
@@ -128,7 +129,7 @@ internal class GetVilkårsvurderingerForPersonTransaksjonTest : DatabaseTest() {
             assertEquals(etterspurt.medlemskapsvurderingId.value.toString(), krav["id"].asString()) {
                 "Responsen skal inneholde den etterspurte vurderingen, ikke en annen av personens vurderinger: $json"
             }
-            assertEquals("OVERFORT_FRA_SPLEIS", krav["kravkilde"].asString())
+            assertEquals("OVERFOERT_FRA_SPLEIS", krav["kilde"]["kildetype"].asString())
             assertEquals(2, Database.antallRader("medlemskapsvurdering"))
             assertEquals(1, Database.antallRader("migreringslogg"))
             val lagret = transaksjon { it.medlemskapsvurderinger.finn(enAnnen.medlemskapsvurderingId) }
@@ -204,12 +205,11 @@ internal class GetVilkårsvurderingerForPersonTransaksjonTest : DatabaseTest() {
         val konflikt = spleisSelvstendig()
         transaksjon {
             it.medlemskapsvurderinger.lagre(
-                Medlemskapsvurdering.fraInfotrygd(
+                Medlemskapsvurdering.overførtFraInfotrygd(
                     id = konflikt.medlemskapsvurderingId,
-                    vurdertTidspunkt = konflikt.opprettet,
                     fødselsnummer = "12029240046",
                     skjæringstidspunkt = konflikt.skjæringstidspunkt,
-                    erOk = true,
+                    vurdertTidspunkt = konflikt.opprettet,
                 ),
             )
         }
@@ -225,9 +225,10 @@ internal class GetVilkårsvurderingerForPersonTransaksjonTest : DatabaseTest() {
     }
 
     private fun spleisSelvstendig(skjæringstidspunkt: LocalDate = LocalDate.of(2024, 3, 1)) =
-        SpleisMedlemskapsvurdering.SpleisSelvstendig(
+        SpleisMedlemskapsvurdering.Spleis(
             medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
             opprettet = Instant.now(),
             skjæringstidspunkt = skjæringstidspunkt,
+            status = Medlemskapsstatus.Ja,
         )
 }

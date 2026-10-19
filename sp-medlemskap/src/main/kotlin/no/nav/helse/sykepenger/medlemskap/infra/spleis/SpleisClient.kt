@@ -3,10 +3,8 @@ package no.nav.helse.sykepenger.medlemskap.infra.spleis
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.github.navikt.tbd_libs.access_token.AccessTokenProvider
 import com.github.navikt.tbd_libs.access_token.TexasClient
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
-import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering.SpleisArbeidstaker.Ansettelsesperiode
-import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering.SpleisArbeidstaker.Arbeidsforhold
-import no.nav.helse.til
 import tools.jackson.module.kotlin.jacksonObjectMapper
 import tools.jackson.module.kotlin.readValue
 import java.net.URI
@@ -84,6 +82,10 @@ internal class SpleisClient(
 
         /**
          * Responsen fra `POST /api/medlemskapsvurderinger` i spleis-api.
+         *
+         * Endepunktet finnes ikke i Spleis ennå. Kontrakten er tenkt som motstykket til
+         * `POST /api/medlemskapsvurderinger`: ett innslag per medlemskapsvurdering Spleis har lagt til grunn
+         * i et vilkårsgrunnlag, med en id Spleis også sender med i behovet `MedlemskapsvurderingResultat`.
          */
         @JsonIgnoreProperties(ignoreUnknown = true)
         private data class MedlemskapsvurderingerResponse(
@@ -93,61 +95,38 @@ internal class SpleisClient(
         }
 
         /**
-         * Rå JSON-representasjon av en medlemskapsvurdering fra spleis-api, slik den kommer over
-         * ledningen. Dette er utelukkende et internt format for klienten: den mappes videre til
-         * [SpleisMedlemskapsvurdering], som kun tillater de gyldige kombinasjonene av type og kilde.
+         * Rå JSON-representasjon av en medlemskapsvurdering fra spleis-api. [medlemskapstatus] er bare satt
+         * når kilden er SPLEIS; for vilkårsgrunnlag fra Infotrygd vet ikke Spleis hvordan medlemskap ble vurdert.
          */
         @JsonIgnoreProperties(ignoreUnknown = true)
         private data class MedlemskapsvurderingDto(
             val medlemskapsvurderingId: MedlemskapsvurderingId,
             val opprettet: LocalDateTime,
-            val type: MedlemskapsvurderingTypeDto,
             val skjæringstidspunkt: LocalDate,
             val kilde: MedlemskapsvurderingKildeDto,
-            // Følgende felter er kun satt når kilden er SPLEIS og typen er ARBEIDSTAKER. I alle andre
-            // gyldige kombinasjoner har vi ingen kjennskap til om, eller hvordan, medlemskapsvilkåret
-            // ble vurdert.
-            val oppfylt: Boolean? = null,
-            val antallDager: Int? = null,
-            val medlemskapsperiode: PeriodeDto? = null,
-            val arbeidsforhold: List<ArbeidsforholdDto> = emptyList(),
+            val medlemskapstatus: MedlemskapstatusDto? = null,
         ) {
             val opprettetInstant = opprettet.atZone(ZoneId.of("Europe/Oslo")).toInstant()
 
             fun tilDomene(): SpleisMedlemskapsvurdering =
-                when (kilde to type) {
-                    MedlemskapsvurderingKildeDto.SPLEIS to MedlemskapsvurderingTypeDto.ARBEIDSTAKER ->
-                        SpleisMedlemskapsvurdering.SpleisArbeidstaker(
+                when (kilde) {
+                    MedlemskapsvurderingKildeDto.SPLEIS ->
+                        SpleisMedlemskapsvurdering.Spleis(
                             medlemskapsvurderingId = medlemskapsvurderingId,
-                            opprettet = opprettetInstant,
                             skjæringstidspunkt = skjæringstidspunkt,
-                            oppfylt = requireNotNull(oppfylt) { "oppfylt mangler for SPLEIS/ARBEIDSTAKER-vurdering $medlemskapsvurderingId" },
-                            antallDager = requireNotNull(antallDager) { "antallDager mangler for SPLEIS/ARBEIDSTAKER-vurdering $medlemskapsvurderingId" },
-                            medlemskapsperiode = medlemskapsperiode?.tilDomene(),
-                            arbeidsforhold = arbeidsforhold.map { it.tilDomene() },
+                            opprettet = opprettetInstant,
+                            status =
+                                checkNotNull(medlemskapstatus) { "medlemskapstatus mangler for SPLEIS-vurdering $medlemskapsvurderingId" }
+                                    .tilDomene(),
                         )
 
-                    MedlemskapsvurderingKildeDto.SPLEIS to MedlemskapsvurderingTypeDto.SELVSTENDIG ->
-                        SpleisMedlemskapsvurdering.SpleisSelvstendig(
+                    MedlemskapsvurderingKildeDto.INFOTRYGD ->
+                        SpleisMedlemskapsvurdering.Infotrygd(
                             medlemskapsvurderingId = medlemskapsvurderingId,
-                            opprettet = opprettetInstant,
                             skjæringstidspunkt = skjæringstidspunkt,
-                        )
-
-                    MedlemskapsvurderingKildeDto.INFOTRYGD to MedlemskapsvurderingTypeDto.ARBEIDSTAKER ->
-                        SpleisMedlemskapsvurdering.InfotrygdArbeidstaker(
-                            medlemskapsvurderingId = medlemskapsvurderingId,
                             opprettet = opprettetInstant,
-                            skjæringstidspunkt = skjæringstidspunkt,
                         )
-
-                    else -> error("Ugyldig kombinasjon av kilde ($kilde) og type ($type) for medlemskapsvurdering $medlemskapsvurderingId")
                 }
-        }
-
-        private enum class MedlemskapsvurderingTypeDto {
-            ARBEIDSTAKER,
-            SELVSTENDIG,
         }
 
         private enum class MedlemskapsvurderingKildeDto {
@@ -155,32 +134,21 @@ internal class SpleisClient(
             SPLEIS,
         }
 
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        private data class PeriodeDto(
-            val fom: LocalDate,
-            val tom: LocalDate,
-        ) {
-            fun tilDomene() = fom til tom
-        }
+        /** Speiler `MedlemskapsvurderingDto` i Spleis (Ja, Nei, VetIkke, UavklartMedBrukerspørsmål). */
+        private enum class MedlemskapstatusDto {
+            JA,
+            NEI,
+            VET_IKKE,
+            UAVKLART_MED_BRUKERSPORSMAAL,
+            ;
 
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        private data class ArbeidsforholdDto(
-            val organisasjonsnummer: String,
-            val ansettelsesperioder: List<AnsettelsesperiodeDto>,
-        ) {
             fun tilDomene() =
-                Arbeidsforhold(
-                    organisasjonsnummer = organisasjonsnummer,
-                    ansettelsesperioder = ansettelsesperioder.map { it.tilDomene() },
-                )
-        }
-
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        private data class AnsettelsesperiodeDto(
-            val fom: LocalDate,
-            val tom: LocalDate?,
-        ) {
-            fun tilDomene() = Ansettelsesperiode(fom = fom, tom = tom)
+                when (this) {
+                    JA -> Medlemskapsstatus.Ja
+                    NEI -> Medlemskapsstatus.Nei
+                    VET_IKKE -> Medlemskapsstatus.Uavklart
+                    UAVKLART_MED_BRUKERSPORSMAAL -> Medlemskapsstatus.UavklartMedBrukerspørsmål
+                }
         }
     }
 }

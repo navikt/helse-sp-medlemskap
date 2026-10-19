@@ -1,13 +1,7 @@
 package no.nav.helse.sykepenger.medlemskap.infra.rest
 
-import no.nav.helse.Periode
-import no.nav.helse.sykepenger.medlemskap.domain.Arbeidsforhold
-import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsgrunnlag
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
-import no.nav.helse.sykepenger.medlemskap.domain.Utfall
-import no.nav.helse.sykepenger.medlemskap.domain.UtledetFakta
-import no.nav.helse.sykepenger.medlemskap.domain.Vilkårskode
-import no.nav.helse.sykepenger.medlemskap.domain.Vilkårsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import java.time.LocalDate
 
@@ -31,63 +25,22 @@ internal object Vurderingsrespons {
         )
 }
 
-private fun Medlemskapsvurdering.tilApi(): ApiMedlemskapsvurdering =
-    when (this) {
-        is Medlemskapsvurdering.OverførtFraInfotrygd ->
-            ApiMedlemskapsvurdering.OverførtFraInfotrygd(
-                id = id.value,
-                kravkode = ApiKravkode.MEDLEMSKAP,
-                medlemskapOk = erOk,
-            )
-
-        is Medlemskapsvurdering.OverførtFraSpleis ->
-            ApiMedlemskapsvurdering.OverførtFraSpleis(
-                id = id.value,
-                kravkode = ApiKravkode.MEDLEMSKAP,
-                medlemskapOk = erOk,
-                avgjørendeVilkårskode = avgjørendeVilkårskode?.tilApi(),
-                vurderinger = vilkårsvurderinger.map { it.tilApi() },
-            )
-
-        is Medlemskapsvurdering.VurdertISpVilkårsprøving ->
-            ApiMedlemskapsvurdering.VurdertISpVilkarproving(
-                id = id.value,
-                kravkode = ApiKravkode.MEDLEMSKAP,
-                medlemskapOk = erOk,
-                avgjørendeVilkårskode = avgjørendeVilkårskode?.tilApi(),
-                vurderinger = vilkårsvurderinger.map { it.tilApi() },
-            )
-    }
-
-private fun Vilkårsvurdering.tilApi() =
-    ApiVilkårsvurdering(
+private fun Medlemskapsvurdering.tilApi() =
+    ApiMedlemskapsvurdering(
         id = id.value,
-        vilkårskode = vilkårskode.tilApi(),
-        utfall = utfall.tilApi(),
+        kravkode = ApiKravkode.MEDLEMSKAP,
+        medlemskapOk = erOk,
+        status = status.tilApi(),
         vurdertTidspunkt = vurdertTidspunkt,
-        lovreferanse = lovreferanse.tilApi(),
         kilde = kilde.tilApi(),
     )
 
-private fun no.nav.helse.sykepenger.medlemskap.domain.Lovreferanse.tilApi() =
-    ApiLovreferanse(
-        lov = lov,
-        paragraf = paragraf,
-        avsnitt = avsnitt,
-        setning = setning,
-        bokstav = bokstav,
-        iKraftFra = iKraftFra,
-    )
-
-private fun Utfall.tilApi(): ApiUtfall =
+private fun Medlemskapsstatus.tilApi(): ApiMedlemskapsstatus =
     when (this) {
-        Utfall.Oppfylt -> ApiUtfall.OPPFYLT
-        Utfall.IkkeOppfylt -> ApiUtfall.IKKE_OPPFYLT
-    }
-
-private fun Vilkårskode.tilApi(): ApiVilkårskode =
-    when (this) {
-        Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER -> ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER
+        Medlemskapsstatus.Ja -> ApiMedlemskapsstatus.JA
+        Medlemskapsstatus.Nei -> ApiMedlemskapsstatus.NEI
+        Medlemskapsstatus.Uavklart -> ApiMedlemskapsstatus.UAVKLART
+        Medlemskapsstatus.UavklartMedBrukerspørsmål -> ApiMedlemskapsstatus.UAVKLART_MED_BRUKERSPORSMAAL
     }
 
 private fun Vurderingskilde.tilApi(): ApiVurderingskilde =
@@ -95,45 +48,13 @@ private fun Vurderingskilde.tilApi(): ApiVurderingskilde =
         is Vurderingskilde.Automatisk ->
             ApiVurderingskilde.Automatisk(
                 versjonAvKildekode = versjonAvKildekode,
-                grunnlag = grunnlag.tilApi(utledetFakta),
+                oppslagsperiode = ApiPeriode(fom = oppslagsperiode.start, tom = oppslagsperiode.endInclusive),
             )
 
         is Vurderingskilde.Saksbehandler ->
             ApiVurderingskilde.Saksbehandler(ident = ident, fritekstbegrunnelse = fritekstbegrunnelse, journalpostId = journalpostId)
 
-        is Vurderingskilde.OverførtFraSpleis ->
-            ApiVurderingskilde.OverførtFraSpleis(grunnlag = grunnlag.tilApi(utledetFakta))
+        Vurderingskilde.OverførtFraSpleis -> ApiVurderingskilde.OverførtFraSpleis()
+
+        Vurderingskilde.OverførtFraInfotrygd -> ApiVurderingskilde.OverførtFraInfotrygd()
     }
-
-private fun Medlemskapsgrunnlag.tilApi(utledetFakta: UtledetFakta): ApiVurderingsgrunnlag =
-    when (this) {
-        is Medlemskapsgrunnlag.Arbeidstaker -> {
-            check(utledetFakta is UtledetFakta.Medlemskapstid) {
-                "Arbeidstaker-grunnlag skal ha utledet medlemskapstid, fikk $utledetFakta"
-            }
-            ApiVurderingsgrunnlag.Arbeidsforhold(
-                arbeidsforhold = arbeidsforhold.map { it.tilApi() },
-                medlemskapsperiode = utledetFakta.medlemskapsperiode?.tilApi(),
-                medlemskapsdager = utledetFakta.medlemskapsdager,
-            )
-        }
-
-        Medlemskapsgrunnlag.SelvstendigNæringsdrivende -> ApiVurderingsgrunnlag.SelvstendigNæringsdrivende()
-    }
-
-private fun Periode.tilApi() = ApiPeriode(fom = start, tom = endInclusive)
-
-private fun Arbeidsforhold.tilApi() =
-    ApiArbeidsforhold(
-        organisasjonsnummer = orgnummer,
-        fom = ansettelseperiode.start,
-        tom = ansettelseperiode.endInclusive.takeUnless { it == LocalDate.MAX },
-        type =
-            when (type) {
-                Arbeidsforhold.Arbeidsforholdtype.FORENKLET_OPPGJØRSORDNING -> ApiArbeidsforholdtype.FORENKLET_OPPGJØRSORDNING
-                Arbeidsforhold.Arbeidsforholdtype.FRILANSER -> ApiArbeidsforholdtype.FRILANSER
-                Arbeidsforhold.Arbeidsforholdtype.MARITIMT -> ApiArbeidsforholdtype.MARITIMT
-                Arbeidsforhold.Arbeidsforholdtype.ORDINÆRT -> ApiArbeidsforholdtype.ORDINÆRT
-                Arbeidsforhold.Arbeidsforholdtype.UKJENT -> ApiArbeidsforholdtype.UKJENT
-            },
-    )

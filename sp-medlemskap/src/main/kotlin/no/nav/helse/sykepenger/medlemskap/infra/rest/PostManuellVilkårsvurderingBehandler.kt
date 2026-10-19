@@ -5,10 +5,8 @@ import no.nav.helse.sykepenger.medlemskap.application.HandlingType
 import no.nav.helse.sykepenger.medlemskap.application.OutboxKonvolutt
 import no.nav.helse.sykepenger.medlemskap.application.OutboxMelding
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
-import no.nav.helse.sykepenger.medlemskap.domain.Utfall
-import no.nav.helse.sykepenger.medlemskap.domain.Vilkårskode
-import no.nav.helse.sykepenger.medlemskap.domain.Vilkårsvurdering
 import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.Tilgang
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.KallKontekst
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.PostBehandler
@@ -40,27 +38,14 @@ internal class PostManuellVilkårsvurderingBehandler :
             personIkkeFunnet = { ApiManuellVilkårsvurderingFeil.PersonIkkeFunnet },
             manglerTilgang = { ApiManuellVilkårsvurderingFeil.ManglerTilgang },
         ) { identitetsnummer ->
-            val vilkårskode = request.vilkårskode.fraApi()
-
-            val vilkårsvurdering =
-                Vilkårsvurdering.avSaksbehandler(
-                    vilkårskode = vilkårskode,
-                    utfall = request.utfall.fraApi(),
-                    saksbehandlerIdent = kallKontekst.saksbehandler.navIdent.value,
-                    fritekstbegrunnelse = request.fritekstbegrunnelse,
-                    journalpostId = request.journalpostId,
-                )
-
             val kravvurdering =
                 Medlemskapsvurdering.avSaksbehandler(
                     fødselsnummer = identitetsnummer.value,
                     skjæringstidspunkt = request.skjæringstidspunkt,
-                    vilkårsvurdering = vilkårsvurdering,
-                    forrigeVurdering =
-                        kallKontekst.transaksjon.medlemskapsvurderinger.gjeldende(
-                            fødselsnummer = identitetsnummer.value,
-                            skjæringstidspunkt = request.skjæringstidspunkt,
-                        ),
+                    status = request.status.fraApi(),
+                    saksbehandlerIdent = kallKontekst.saksbehandler.navIdent.value,
+                    fritekstbegrunnelse = request.fritekstbegrunnelse,
+                    journalpostId = request.journalpostId,
                 )
 
             kallKontekst.transaksjon.medlemskapsvurderinger.lagre(kravvurdering)
@@ -96,13 +81,8 @@ internal class PostManuellVilkårsvurderingBehandler :
     }
 }
 
-private fun ApiVilkårskode.fraApi(): Vilkårskode =
+private fun ApiManuellMedlemskapsstatus.fraApi(): Medlemskapsstatus =
     when (this) {
-        ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER -> Vilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER
-    }
-
-private fun ApiUtfall.fraApi(): Utfall =
-    when (this) {
-        ApiUtfall.OPPFYLT -> Utfall.Oppfylt
-        ApiUtfall.IKKE_OPPFYLT -> Utfall.IkkeOppfylt
+        ApiManuellMedlemskapsstatus.JA -> Medlemskapsstatus.Ja
+        ApiManuellMedlemskapsstatus.NEI -> Medlemskapsstatus.Nei
     }

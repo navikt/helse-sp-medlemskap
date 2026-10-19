@@ -7,79 +7,23 @@ import org.junit.jupiter.api.Test
 import tools.jackson.databind.introspect.DefaultAccessorNamingStrategy
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.jacksonObjectMapper
-import java.time.Instant
 import java.time.LocalDate
-import java.util.*
 
 class ApiDiskriminatorTest {
-    @Test
-    fun `ApiMedlemskapsvurdering - navn i JsonSubTypes stemmer med faktisk kravkilde`() {
-        verifiserDiskriminator(
-            ApiMedlemskapsvurdering::class.java,
-            ApiMedlemskapsvurdering.VurdertISpVilkarproving(
-                id = UUID.randomUUID(),
-                kravkode = ApiKravkode.MEDLEMSKAP,
-                medlemskapOk = true,
-                avgjørendeVilkårskode = ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                vurderinger =
-                    listOf(
-                        ApiVilkårsvurdering(
-                            id = UUID.randomUUID(),
-                            vilkårskode = ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                            utfall = ApiUtfall.OPPFYLT,
-                            vurdertTidspunkt = Instant.now(),
-                            lovreferanse = ApiLovreferanse("folketrygdloven", "8-2", 1, 1, null, LocalDate.of(2025, 12, 22)),
-                            kilde =
-                                ApiVurderingskilde.Automatisk(
-                                    versjonAvKildekode = "1",
-                                    grunnlag = ApiVurderingsgrunnlag.SelvstendigNæringsdrivende(),
-                                ),
-                        ),
-                    ),
-            ),
-            ApiMedlemskapsvurdering.OverførtFraSpleis(
-                id = UUID.randomUUID(),
-                kravkode = ApiKravkode.MEDLEMSKAP,
-                medlemskapOk = true,
-                avgjørendeVilkårskode = ApiVilkårskode.MEDLEMSKAP_ARBEID_MINST_4_UKER,
-                vurderinger = emptyList(),
-            ),
-            ApiMedlemskapsvurdering.OverførtFraInfotrygd(
-                id = UUID.randomUUID(),
-                kravkode = ApiKravkode.MEDLEMSKAP,
-                medlemskapOk = true,
-            ),
-        )
-    }
-
     @Test
     fun `ApiVurderingskilde - navn i JsonSubTypes stemmer med faktisk kildetype`() {
         verifiserDiskriminator(
             ApiVurderingskilde::class.java,
             ApiVurderingskilde.Automatisk(
                 versjonAvKildekode = "1",
-                grunnlag = ApiVurderingsgrunnlag.SelvstendigNæringsdrivende(),
+                oppslagsperiode = ApiPeriode(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)),
             ),
             ApiVurderingskilde.Saksbehandler(
                 ident = "Z999999",
                 fritekstbegrunnelse = "en forklaring",
             ),
-            ApiVurderingskilde.OverførtFraSpleis(
-                grunnlag = ApiVurderingsgrunnlag.SelvstendigNæringsdrivende(),
-            ),
-        )
-    }
-
-    @Test
-    fun `ApiVurderingsgrunnlag - navn i JsonSubTypes stemmer med faktisk grunnlagstype`() {
-        verifiserDiskriminator(
-            ApiVurderingsgrunnlag::class.java,
-            ApiVurderingsgrunnlag.Arbeidsforhold(
-                arbeidsforhold = emptyList(),
-                medlemskapsperiode = null,
-                medlemskapsdager = 0,
-            ),
-            ApiVurderingsgrunnlag.SelvstendigNæringsdrivende(),
+            ApiVurderingskilde.OverførtFraSpleis(),
+            ApiVurderingskilde.OverførtFraInfotrygd(),
         )
     }
 

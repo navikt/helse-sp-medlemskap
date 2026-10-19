@@ -14,17 +14,6 @@ internal value class MedlemskapsprøvingId(
 }
 
 @JvmInline
-internal value class VilkårsvurderingId(
-    val value: UUID,
-) {
-    override fun toString() = value.toString()
-
-    companion object {
-        fun ny() = VilkårsvurderingId(UUID.randomUUID())
-    }
-}
-
-@JvmInline
 internal value class MedlemskapsvurderingId(
     val value: UUID,
 ) {

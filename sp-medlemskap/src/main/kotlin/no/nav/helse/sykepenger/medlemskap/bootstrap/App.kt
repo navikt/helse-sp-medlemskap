@@ -11,8 +11,8 @@ import no.nav.helse.rapids_rivers.RapidApplication
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.infra.db.PostgresTransaksjonProvider
-import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForAutomatiskArbeidstakerMedlemskapsvurderingRiver
-import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForNyArbeidstakerMedlemskapsvurderingRiver
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForAutomatiskMedlemskapsvurderingRiver
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForNyMedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingResultatRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.OutboxPubliseringsjobb
@@ -96,12 +96,12 @@ fun main() {
         })
         .apply {
             rapidsConnection = this
-            GrunnlagForAutomatiskArbeidstakerMedlemskapsvurderingRiver(
+            GrunnlagForAutomatiskMedlemskapsvurderingRiver(
                 rapidsConnection = this,
                 transaksjonProvider = transaksjonProvider,
                 versjonAvKode = versjonAvKode,
             )
-            GrunnlagForNyArbeidstakerMedlemskapsvurderingRiver(
+            GrunnlagForNyMedlemskapsvurderingRiver(
                 rapidsConnection = this,
                 transaksjonProvider = transaksjonProvider,
                 versjonAvKode = versjonAvKode,
@@ -116,14 +116,14 @@ fun main() {
                 transaksjonProvider = transaksjonProvider,
                 spleisClient = spleisClient,
             )
-            PersonAvstemmingRiver(
-                rapidsConnection = this,
-                personAvstemmingService =
-                    PersonAvstemmingService(
-                        transaksjonProvider = transaksjonProvider,
-                        spleisClient = spleisClient,
-                    ),
-            )
+//            PersonAvstemmingRiver(
+//                rapidsConnection = this,
+//                personAvstemmingService =
+//                    PersonAvstemmingService(
+//                        transaksjonProvider = transaksjonProvider,
+//                        spleisClient = spleisClient,
+//                    ),
+//            )
             register(
                 OutboxPubliseringsjobb(
                     rapidsConnection = this,

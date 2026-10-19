@@ -5,10 +5,8 @@ import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock.*
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
-import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering.SpleisArbeidstaker.Ansettelsesperiode
-import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering.SpleisArbeidstaker.Arbeidsforhold
-import no.nav.helse.til
 import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
@@ -107,33 +105,20 @@ internal class SpleisClientTest {
 
         assertEquals(4, medlemskapsvurderinger.size)
 
-        val infotrygdvurdering = medlemskapsvurderinger[0]
-        assertEquals(MedlemskapsvurderingId(UUID.fromString("b89e2ae5-59e3-388e-98cd-42a8e7350773")), infotrygdvurdering.medlemskapsvurderingId)
-        assertEquals(LocalDate.of(2018, 1, 1), infotrygdvurdering.skjæringstidspunkt)
-        assertTrue(infotrygdvurdering is SpleisMedlemskapsvurdering.InfotrygdArbeidstaker)
-        assertEquals(klokka12, infotrygdvurdering.opprettet)
-
-        val ikkeOppfyltSpleisvurdering = medlemskapsvurderinger[1] as SpleisMedlemskapsvurdering.SpleisArbeidstaker
-        assertEquals(false, ikkeOppfyltSpleisvurdering.oppfylt)
-        assertEquals(0, ikkeOppfyltSpleisvurdering.antallDager)
-        assertNull(ikkeOppfyltSpleisvurdering.medlemskapsperiode)
-        assertEquals(emptyList<Arbeidsforhold>(), ikkeOppfyltSpleisvurdering.arbeidsforhold)
-        assertEquals(klokka12, ikkeOppfyltSpleisvurdering.opprettet)
-
-        val oppfyltSpleisvurdering = medlemskapsvurderinger[2] as SpleisMedlemskapsvurdering.SpleisArbeidstaker
-        assertEquals(true, oppfyltSpleisvurdering.oppfylt)
-        assertEquals(365, oppfyltSpleisvurdering.antallDager)
-        assertEquals(LocalDate.of(2017, 4, 1) til LocalDate.of(2018, 3, 31), oppfyltSpleisvurdering.medlemskapsperiode)
         assertEquals(
-            listOf(Arbeidsforhold("987654322", listOf(Ansettelsesperiode(LocalDate.of(2017, 4, 1), null)))),
-            oppfyltSpleisvurdering.arbeidsforhold,
+            SpleisMedlemskapsvurdering.Infotrygd(
+                medlemskapsvurderingId = MedlemskapsvurderingId(UUID.fromString("b89e2ae5-59e3-388e-98cd-42a8e7350773")),
+                skjæringstidspunkt = LocalDate.of(2018, 1, 1),
+                opprettet = klokka12,
+            ),
+            medlemskapsvurderinger[0],
         )
-        assertEquals(klokka11, oppfyltSpleisvurdering.opprettet)
-
-        val selvstendigvurdering = medlemskapsvurderinger[3]
-        assertEquals(LocalDate.of(2018, 4, 1), selvstendigvurdering.skjæringstidspunkt)
-        assertTrue(selvstendigvurdering is SpleisMedlemskapsvurdering.SpleisSelvstendig)
-        assertEquals(klokka12, selvstendigvurdering.opprettet)
+        assertEquals(
+            listOf(Medlemskapsstatus.Nei, Medlemskapsstatus.Ja, Medlemskapsstatus.Uavklart),
+            medlemskapsvurderinger.drop(1).map { (it as SpleisMedlemskapsvurdering.Spleis).status },
+        )
+        assertEquals(klokka11, medlemskapsvurderinger[2].opprettet)
+        assertEquals(LocalDate.of(2018, 4, 1), medlemskapsvurderinger[3].skjæringstidspunkt)
 
         server.verify(
             postRequestedFor(urlEqualTo("/api/medlemskapsvurderinger"))
@@ -156,7 +141,7 @@ internal class SpleisClientTest {
     }
 
     @Test
-    fun `kaster exception ved ugyldig kombinasjon av kilde og type`() {
+    fun `kaster exception når spleis-vurdering mangler medlemskapstatus`() {
         server.stubFor(
             post(urlEqualTo("/api/medlemskapsvurderinger"))
                 .willReturn(
@@ -169,10 +154,9 @@ internal class SpleisClientTest {
                               "medlemskapsvurderinger": [
                                 {
                                   "medlemskapsvurderingId": "b89e2ae5-59e3-388e-98cd-42a8e7350773",
-                                  "opprettet": "$klokka12",
-                                  "type": "SELVSTENDIG",
+                                  "opprettet": "2026-09-29T12:00:00.000000",
                                   "skjæringstidspunkt": "2018-01-01",
-                                  "kilde": "INFOTRYGD"
+                                  "kilde": "SPLEIS"
                                 }
                               ]
                             }
@@ -192,53 +176,31 @@ internal class SpleisClientTest {
               "medlemskapsvurderinger": [
                 {
                   "medlemskapsvurderingId": "b89e2ae5-59e3-388e-98cd-42a8e7350773",
-                  "opprettet": "2026-09-29T12:00:00.000000",                  
-                  "type": "ARBEIDSTAKER",
+                  "opprettet": "2026-09-29T12:00:00.000000",
                   "skjæringstidspunkt": "2018-01-01",
                   "kilde": "INFOTRYGD"
                 },
                 {
                   "medlemskapsvurderingId": "00000000-0000-0000-0000-000000000001",
-                  "opprettet": "2026-09-29T12:00:00.000000",                  
-                  "type": "ARBEIDSTAKER",
+                  "opprettet": "2026-09-29T12:00:00.000000",
                   "skjæringstidspunkt": "2018-04-01",
                   "kilde": "SPLEIS",
-                  "oppfylt": false,
-                  "antallDager": 0,
-                  "medlemskapsperiode": null,
-                  "arbeidsforhold": []
+                  "medlemskapstatus": "NEI"
                 },
                 {
                   "medlemskapsvurderingId": "00000000-0000-0000-0000-000000000002",
-                  "opprettet": "2026-09-29T11:00:00.000000",                  
-                  "type": "ARBEIDSTAKER",
+                  "opprettet": "2026-09-29T11:00:00.000000",
                   "skjæringstidspunkt": "2018-04-01",
                   "kilde": "SPLEIS",
-                  "arbeidsforhold": [
-                    {
-                      "organisasjonsnummer": "987654322",
-                      "ansettelsesperioder": [
-                        {
-                          "fom": "2017-04-01",
-                          "tom": null
-                        }
-                      ]
-                    }
-                  ],
-                  "medlemskapsperiode": {
-                    "fom": "2017-04-01",
-                    "tom": "2018-03-31"
-                  },
-                  "oppfylt": true,
-                  "antallDager": 365
+                  "medlemskapstatus": "JA"
                 },
                 {
                   "medlemskapsvurderingId": "00000000-0000-0000-0000-000000000003",
-                  "opprettet": "2026-09-29T12:00:00.000000",                  
+                  "opprettet": "2026-09-29T12:00:00.000000",
                   "skjæringstidspunkt": "2018-04-01",
                   "kilde": "SPLEIS",
-                  "type": "SELVSTENDIG"
-                }                
+                  "medlemskapstatus": "VET_IKKE"
+                }
               ]
             }
             """

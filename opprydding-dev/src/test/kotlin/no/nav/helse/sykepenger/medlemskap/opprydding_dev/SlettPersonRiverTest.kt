@@ -34,22 +34,17 @@ internal class SlettPersonRiverTest {
         val fødselsnummer = "01020312345"
 
         insertMedlemskapsproving(fødselsnummer = fødselsnummer)
-        val medlemskapsvurderingId = insertMedlemskapsvurdering(fødselsnummer = fødselsnummer)
-        insertVilkarsvurdering(medlemskapsvurderingId = medlemskapsvurderingId, avgjørende = true)
+        insertMedlemskapsvurdering(fødselsnummer = fødselsnummer)
         insertMigreringslogg(fødselsnummer = fødselsnummer)
 
         assertEquals(1, Database.countMedlemskapsproving())
         assertEquals(1, Database.countMedlemskapsvurdering())
-        assertEquals(1, Database.countVilkarsvurdering())
-        assertEquals(1, Database.countMedlemskapsvurderingVilkarsvurdering())
         assertEquals(1, Database.countMigreringslogg())
 
         rapid.sendTestMessage(slettPersonMelding(fødselsnummer))
 
         assertEquals(0, Database.countMedlemskapsproving())
         assertEquals(0, Database.countMedlemskapsvurdering())
-        assertEquals(0, Database.countVilkarsvurdering())
-        assertEquals(0, Database.countMedlemskapsvurderingVilkarsvurdering())
         assertEquals(0, Database.countMigreringslogg())
     }
 
@@ -59,12 +54,10 @@ internal class SlettPersonRiverTest {
         val fødselsnummer2 = "02020312345"
 
         insertMedlemskapsproving(fødselsnummer = fødselsnummer1)
-        val medlemskapsvurderingId1 = insertMedlemskapsvurdering(fødselsnummer = fødselsnummer1)
-        insertVilkarsvurdering(medlemskapsvurderingId = medlemskapsvurderingId1)
+        insertMedlemskapsvurdering(fødselsnummer = fødselsnummer1)
 
         insertMedlemskapsproving(fødselsnummer = fødselsnummer2)
-        val medlemskapsvurderingId2 = insertMedlemskapsvurdering(fødselsnummer = fødselsnummer2)
-        insertVilkarsvurdering(medlemskapsvurderingId = medlemskapsvurderingId2)
+        insertMedlemskapsvurdering(fødselsnummer = fødselsnummer2)
         insertMigreringslogg(fødselsnummer = fødselsnummer1)
         insertMigreringslogg(fødselsnummer = fødselsnummer2)
 
@@ -72,32 +65,7 @@ internal class SlettPersonRiverTest {
 
         assertEquals(1, Database.countMedlemskapsproving())
         assertEquals(1, Database.countMedlemskapsvurdering())
-        assertEquals(1, Database.countVilkarsvurdering())
-        assertEquals(1, Database.countMedlemskapsvurderingVilkarsvurdering())
         assertEquals(1, Database.countMigreringslogg())
-    }
-
-    @Test
-    fun `beholder vilkårsvurderinger som deles med annen person`() {
-        val fødselsnummer1 = "01020312345"
-        val fødselsnummer2 = "02020312345"
-        val medlemskapsvurderingId1 = insertMedlemskapsvurdering(fødselsnummer = fødselsnummer1)
-        val medlemskapsvurderingId2 = insertMedlemskapsvurdering(fødselsnummer = fødselsnummer2)
-        val vilkarsvurderingId = UUID.randomUUID()
-        insertVilkarsvurdering(id = vilkarsvurderingId, medlemskapsvurderingId = medlemskapsvurderingId1, avgjørende = true)
-        kobleVilkarsvurdering(vilkarsvurderingId, medlemskapsvurderingId2, avgjørende = true)
-
-        rapid.sendTestMessage(slettPersonMelding(fødselsnummer1))
-
-        assertEquals(1, Database.countMedlemskapsvurdering())
-        assertEquals(1, Database.countVilkarsvurdering())
-        assertEquals(1, Database.countMedlemskapsvurderingVilkarsvurdering())
-
-        rapid.sendTestMessage(slettPersonMelding(fødselsnummer2))
-
-        assertEquals(0, Database.countMedlemskapsvurdering())
-        assertEquals(0, Database.countVilkarsvurdering())
-        assertEquals(0, Database.countMedlemskapsvurderingVilkarsvurdering())
     }
 
     @Test
@@ -129,14 +97,16 @@ internal class SlettPersonRiverTest {
                 .prepareStatement(
                     """
                 INSERT INTO medlemskapsproving
-                    (id, fødselsnummer, skjæringstidspunkt, kategori, startet, tilstand)
-                VALUES (?, ?, ?, 'ARBEIDSTAKER', ?, 'STARTET')
+                    (id, fødselsnummer, skjæringstidspunkt, oppslag_fom, oppslag_tom, startet, tilstand, utestående_behov)
+                VALUES (?, ?, ?, ?, ?, ?, 'VENTER_PÅ_GRUNNLAG', 'Medlemskap')
                 """,
                 ).use { stmt ->
                     stmt.setObject(1, id)
                     stmt.setString(2, fødselsnummer)
                     stmt.setObject(3, LocalDate.of(2026, 1, 1))
-                    stmt.setObject(4, java.sql.Timestamp.from(Instant.now()))
+                    stmt.setObject(4, LocalDate.of(2026, 1, 1))
+                    stmt.setObject(5, LocalDate.of(2026, 1, 31))
+                    stmt.setObject(6, java.sql.Timestamp.from(Instant.now()))
                     stmt.executeUpdate()
                 }
         }
@@ -145,14 +115,14 @@ internal class SlettPersonRiverTest {
     private fun insertMedlemskapsvurdering(
         id: UUID = UUID.randomUUID(),
         fødselsnummer: String,
-    ): UUID {
+    ) {
         Database.dataSource.connection.use { conn ->
             conn
                 .prepareStatement(
                     """
                 INSERT INTO medlemskapsvurdering
-                    (id, fødselsnummer, skjæringstidspunkt, kategori, vurderingskilde, medlemskap_ok, vurdert_tidspunkt)
-                VALUES (?, ?, ?, 'ARBEIDSTAKER', 'VURDERT_I_SP_medlemskap', true, ?)
+                    (id, fødselsnummer, skjæringstidspunkt, status, vurdert_tidspunkt, vurderingskilde, kilde)
+                VALUES (?, ?, ?, 'JA', ?, 'OVERFOERT_FRA_SPLEIS', '{"type": "OVERFOERT_FRA_SPLEIS"}'::jsonb)
                 """,
                 ).use { stmt ->
                     stmt.setObject(1, id)
@@ -162,29 +132,6 @@ internal class SlettPersonRiverTest {
                     stmt.executeUpdate()
                 }
         }
-        return id
-    }
-
-    private fun insertVilkarsvurdering(
-        id: UUID = UUID.randomUUID(),
-        medlemskapsvurderingId: UUID,
-        avgjørende: Boolean = false,
-    ) {
-        Database.dataSource.connection.use { conn ->
-            conn
-                .prepareStatement(
-                    """
-                INSERT INTO vilkarsvurdering
-                    (id, vilkårskode, utfall, vurdert_tidspunkt, vurderingskilde, kilde, lovreferanse)
-                VALUES (?, 'MEDLEMSKAP_ARBEID_MINST_4_UKER', 'OPPFYLT', ?, 'VURDERT_I_SP_medlemskap', '{}'::jsonb, '{}'::jsonb)
-                """,
-                ).use { stmt ->
-                    stmt.setObject(1, id)
-                    stmt.setObject(2, java.sql.Timestamp.from(Instant.now()))
-                    stmt.executeUpdate()
-                }
-        }
-        kobleVilkarsvurdering(id, medlemskapsvurderingId, avgjørende)
     }
 
     private fun insertMigreringslogg(fødselsnummer: String) {
@@ -199,37 +146,6 @@ internal class SlettPersonRiverTest {
                     stmt.setString(1, fødselsnummer)
                     stmt.executeUpdate()
                 }
-        }
-    }
-
-    private fun kobleVilkarsvurdering(
-        vilkarsvurderingId: UUID,
-        medlemskapsvurderingId: UUID,
-        avgjørende: Boolean,
-    ) {
-        Database.dataSource.connection.use { conn ->
-            conn
-                .prepareStatement(
-                    """
-                INSERT INTO medlemskapsvurdering_vilkarsvurdering
-                    (medlemskapsvurdering_id, vilkarsvurdering_id)
-                VALUES (?, ?)
-                """,
-                ).use { stmt ->
-                    stmt.setObject(1, medlemskapsvurderingId)
-                    stmt.setObject(2, vilkarsvurderingId)
-                    stmt.executeUpdate()
-                }
-            if (avgjørende) {
-                conn
-                    .prepareStatement(
-                        "UPDATE medlemskapsvurdering SET avgjørende_vilkårsvurdering = ? WHERE id = ?",
-                    ).use { stmt ->
-                        stmt.setObject(1, vilkarsvurderingId)
-                        stmt.setObject(2, medlemskapsvurderingId)
-                        stmt.executeUpdate()
-                    }
-            }
         }
     }
 

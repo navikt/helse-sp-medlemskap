@@ -54,7 +54,7 @@ spec:
   envFrom:
     # Denne finner du ved å se på environment variables til "hovedappen", finn miljøvariabler knyttet til den ekstra brukeren du har laget.
     # Deretter ser du på secret'en disse er hentet fra
-    - secret: google-sql-sp-medlemskap-sp-medlemskap-sp-vilk-886117fc
+    - secret: fix-me
   env:
     - name: KAFKA_RAPID_TOPIC
       value: tbd.rapid.v1

@@ -17,8 +17,8 @@ import no.nav.helse.sykepenger.medlemskap.application.InMemoryMigreringsloggRepo
 import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
-import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsgrunnlag
-import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
@@ -31,8 +31,8 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureResources
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.get
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
+import no.nav.helse.til
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import tools.jackson.module.kotlin.jacksonObjectMapper
 import java.time.Instant
@@ -180,12 +180,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             val enAnnenIdentitetsnummer = Identitetsnummer("98765432109")
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val andresVurdering =
-                Medlemskapsvurdering.automatisk(
-                    medlemskapsprøvingId = MedlemskapsprøvingId.ny(),
-                    fødselsnummer = enAnnenIdentitetsnummer.value,
-                    skjæringstidspunkt = LocalDate.of(2024, 1, 1),
-                    grunnlag = Medlemskapsgrunnlag.SelvstendigNæringsdrivende,
-                )
+                automatiskVurdering(enAnnenIdentitetsnummer.value, LocalDate.of(2024, 1, 1))
             transaksjonProvider.medlemskapsvurderinger.lagre(andresVurdering)
 
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
@@ -206,16 +201,11 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
      * ville ikke fanget en manglende `@JsonTypeInfo` om den bare sammenlignet kotlin-objekter.
      */
     @Test
-    fun `responsen har diskriminator paa kilde og grunnlag`() =
+    fun `responsen har diskriminator paa kilden`() =
         testApplication {
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val vurdering =
-                Medlemskapsvurdering.automatisk(
-                    medlemskapsprøvingId = MedlemskapsprøvingId.ny(),
-                    fødselsnummer = identitetsnummer.value,
-                    skjæringstidspunkt = LocalDate.of(2024, 2, 1),
-                    grunnlag = Medlemskapsgrunnlag.SelvstendigNæringsdrivende,
-                )
+                automatiskVurdering(identitetsnummer.value, LocalDate.of(2024, 2, 1))
             transaksjonProvider.medlemskapsvurderinger.lagre(vurdering)
 
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
@@ -235,16 +225,11 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             val krav = json["krav"].single()
             assertEquals("MEDLEMSKAP", krav["kravkode"].asString())
             assertEquals(true, krav["medlemskapOk"].asBoolean())
-            assertEquals("VURDERT_I_SP_medlemskap", krav["kravkilde"].asString())
-            assertEquals("MEDLEMSKAP_ARBEID_MINST_4_UKER", krav["avgjørendeVilkårskode"].asString())
+            assertEquals("JA", krav["status"].asString())
 
-            val vilkårsvurdering = krav["vurderinger"].single()
-            assertEquals("MEDLEMSKAP_ARBEID_MINST_4_UKER", vilkårsvurdering["vilkårskode"].asString())
-            assertEquals("OPPFYLT", vilkårsvurdering["utfall"].asString())
-
-            val kilde = vilkårsvurdering["kilde"]
+            val kilde = krav["kilde"]
             assertEquals("AUTOMATISK", kilde["kildetype"].asString()) { "Uten diskriminator kan Speil ikke se hvilken kilde den fikk: $kilde" }
-            assertEquals("SELVSTENDIG_NAERINGSDRIVENDE", kilde["grunnlag"]["grunnlagstype"].asString())
+            assertEquals("2024-02-01", kilde["oppslagsperiode"]["fom"].asString())
 
             // Diskriminatoren er både en deklarert property og en Jackson-annotasjon. Skrives den to
             // ganger, er json-en i praksis ødelagt for strengt validerende konsumenter.
@@ -252,14 +237,14 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
         }
 
     @Test
-    fun `infotrygdkrav sendes uten enkeltvurderinger og uten avgjørende vilkår`() =
+    fun `infotrygdvurdering vises som medlem overført fra infotrygd`() =
         testApplication {
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val vurdering =
-                Medlemskapsvurdering.fraInfotrygd(
+                Medlemskapsvurdering.overførtFraInfotrygd(
+                    id = MedlemskapsvurderingId.ny(),
                     fødselsnummer = identitetsnummer.value,
                     skjæringstidspunkt = LocalDate.of(2024, 2, 1),
-                    erOk = true,
                     vurdertTidspunkt = Instant.now(),
                 )
             transaksjonProvider.medlemskapsvurderinger.lagre(vurdering)
@@ -276,10 +261,9 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
 
             val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
 
-            assertEquals("OVERFOERT_FRA_INFOTRYGD", krav["kravkilde"].asString())
+            assertEquals("OVERFOERT_FRA_INFOTRYGD", krav["kilde"]["kildetype"].asString())
             assertEquals(true, krav["medlemskapOk"].asBoolean())
-            assertFalse(krav.has("vurderinger")) { "Infotrygd-kravet skal ikke ha enkeltvurderinger: $krav" }
-            assertFalse(krav.has("avgjørendeVilkårskode")) { "Vi kjenner ikke det avgjørende vilkåret: $krav" }
+            assertEquals("JA", krav["status"].asString())
         }
 
     /**
@@ -287,30 +271,15 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
      * dette systemet begynte å lagre vurderinger selv. Da skal vi falle tilbake til spleis-api.
      */
     @Test
-    fun `finner ikke vurdering i db, men finner den hos spleis som arbeidstaker`() =
+    fun `finner ikke vurdering i db, men finner den hos spleis`() =
         testApplication {
             val medlemskapsvurderingId = UUID.randomUUID()
             val spleisVurdering =
-                SpleisMedlemskapsvurdering.SpleisArbeidstaker(
+                SpleisMedlemskapsvurdering.Spleis(
                     medlemskapsvurderingId = MedlemskapsvurderingId(medlemskapsvurderingId),
                     opprettet = Instant.now(),
                     skjæringstidspunkt = LocalDate.of(2024, 3, 1),
-                    oppfylt = true,
-                    antallDager = 30,
-                    medlemskapsperiode = null,
-                    arbeidsforhold =
-                        listOf(
-                            SpleisMedlemskapsvurdering.SpleisArbeidstaker.Arbeidsforhold(
-                                organisasjonsnummer = "123456789",
-                                ansettelsesperioder =
-                                    listOf(
-                                        SpleisMedlemskapsvurdering.SpleisArbeidstaker.Ansettelsesperiode(
-                                            fom = LocalDate.of(2024, 1, 1),
-                                            tom = null,
-                                        ),
-                                    ),
-                            ),
-                        ),
+                    status = Medlemskapsstatus.Nei,
                 )
 
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
@@ -328,47 +297,16 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             assertEquals(HttpStatusCode.OK, response.status)
 
             val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
-            assertEquals("OVERFORT_FRA_SPLEIS", krav["kravkilde"].asString())
-            assertEquals(true, krav["medlemskapOk"].asBoolean())
-
-            val kilde = krav["vurderinger"].single()["kilde"]
-            assertEquals("OVERFOERT_FRA_SPLEIS", kilde["kildetype"].asString())
-        }
-
-    @Test
-    fun `finner ikke vurdering i db, men finner den hos spleis som selvstendig`() =
-        testApplication {
-            val medlemskapsvurderingId = UUID.randomUUID()
-            val spleisVurdering =
-                SpleisMedlemskapsvurdering.SpleisSelvstendig(
-                    medlemskapsvurderingId = MedlemskapsvurderingId(medlemskapsvurderingId),
-                    opprettet = Instant.now(),
-                    skjæringstidspunkt = LocalDate.of(2024, 3, 1),
-                )
-
-            val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
-            val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
-
-            application {
-                settOppTestapp(
-                    principal(),
-                    personPseudoIdProvider = pseudoIdProvider,
-                    spleisClient = FakeSpleisClient(vurderinger = listOf(spleisVurdering)),
-                )
-            }
-
-            val response = client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=$medlemskapsvurderingId")
-            assertEquals(HttpStatusCode.OK, response.status)
-
-            val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
-            assertEquals(true, krav["medlemskapOk"].asBoolean())
+            assertEquals(false, krav["medlemskapOk"].asBoolean())
+            assertEquals("NEI", krav["status"].asString())
+            assertEquals("OVERFOERT_FRA_SPLEIS", krav["kilde"]["kildetype"].asString())
         }
 
     @Test
     fun `vurderingene fra spleis lagres i db og registreres i migreringsloggen`() =
         testApplication {
-            val etterspurt = spleisSelvstendig()
-            val enAnnen = spleisSelvstendig()
+            val etterspurt = spleisvurdering()
+            val enAnnen = spleisvurdering()
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
@@ -406,7 +344,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     @Test
     fun `spleis kalles bare første gang, deretter leses vurderingen fra db`() =
         testApplication {
-            val spleisVurdering = spleisSelvstendig()
+            val spleisVurdering = spleisvurdering()
             val spleisClient = FakeSpleisClient(vurderinger = listOf(spleisVurdering))
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
@@ -429,7 +367,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     @Test
     fun `vurderinger som allerede finnes i db lagres ikke paa nytt`() =
         testApplication {
-            val spleisVurdering = spleisSelvstendig()
+            val spleisVurdering = spleisvurdering()
             val transaksjonProvider = InMemoryTransaksjonProvider()
             transaksjonProvider.medlemskapsvurderinger.lagre(spleisVurdering.tilMedlemskapsvurdering(identitetsnummer.value))
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
@@ -457,7 +395,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     @Test
     fun `avstemmer ikke når saksbehandler mangler populasjonstilgang`() =
         testApplication {
-            val spleisClient = FakeSpleisClient(vurderinger = listOf(spleisSelvstendig()))
+            val spleisClient = FakeSpleisClient(vurderinger = listOf(spleisvurdering()))
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
@@ -485,7 +423,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
         testApplication {
             val medlemskapsvurderingId = UUID.randomUUID()
             val spleisVurdering =
-                SpleisMedlemskapsvurdering.InfotrygdArbeidstaker(
+                SpleisMedlemskapsvurdering.Infotrygd(
                     medlemskapsvurderingId = MedlemskapsvurderingId(medlemskapsvurderingId),
                     skjæringstidspunkt = LocalDate.of(2024, 3, 1),
                     opprettet = Instant.now(),
@@ -506,7 +444,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             assertEquals(HttpStatusCode.OK, response.status)
 
             val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
-            assertEquals("OVERFOERT_FRA_INFOTRYGD", krav["kravkilde"].asString())
+            assertEquals("OVERFOERT_FRA_INFOTRYGD", krav["kilde"]["kildetype"].asString())
             assertEquals(true, krav["medlemskapOk"].asBoolean())
         }
 
@@ -549,12 +487,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
         testApplication {
             val transaksjonProvider = InMemoryTransaksjonProvider()
             val vurdering =
-                Medlemskapsvurdering.automatisk(
-                    medlemskapsprøvingId = MedlemskapsprøvingId.ny(),
-                    fødselsnummer = identitetsnummer.value,
-                    skjæringstidspunkt = LocalDate.of(2024, 2, 1),
-                    grunnlag = Medlemskapsgrunnlag.SelvstendigNæringsdrivende,
-                )
+                automatiskVurdering(identitetsnummer.value, LocalDate.of(2024, 2, 1))
             transaksjonProvider.medlemskapsvurderinger.lagre(vurdering)
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
@@ -576,10 +509,16 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             }
         }
 
-    private fun spleisSelvstendig() =
-        SpleisMedlemskapsvurdering.SpleisSelvstendig(
+    private fun spleisvurdering() =
+        SpleisMedlemskapsvurdering.Spleis(
             medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
             opprettet = Instant.now(),
             skjæringstidspunkt = LocalDate.of(2024, 3, 1),
+            status = Medlemskapsstatus.Ja,
         )
+
+    private fun automatiskVurdering(
+        fødselsnummer: String,
+        skjæringstidspunkt: LocalDate,
+    ) = Medlemskapsprøving.start(fødselsnummer, skjæringstidspunkt, skjæringstidspunkt til skjæringstidspunkt).motta(Medlemskapsstatus.Ja)
 }
