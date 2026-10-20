@@ -8,7 +8,7 @@ spec:
     - to:
         - ipBlock:
             # Ip-adressen finner du ved å se på `Public IP address` i Google Cloud Console
-            cidr: fix-me
+            cidr: 34.88.89.193/32
   podSelector:
     matchLabels:
       dbPolicyUser: sp-medlemskap-opprydding-dev
