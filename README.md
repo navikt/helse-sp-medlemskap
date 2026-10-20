@@ -18,6 +18,7 @@ Appen slår opp medlemskap gjennom behovet `Medlemskap`, som sparkel-medlemskap 
 
 Vurderinger som Spleis har gjort før denne appen fantes, hentes fra Spleis ved behov og lagres som `OVERFOERT_FRA_SPLEIS` eller `OVERFOERT_FRA_INFOTRYGD`.
 
+
 ## REST-API for saksbehandler
 
 | Endepunkt | Hva |
