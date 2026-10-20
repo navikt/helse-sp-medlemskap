@@ -153,7 +153,7 @@ internal class E2ETestapp(
             }
             """
 
-        /** Slik sparkel-medlemskap og behovsakkumulatoren løser et `Medlemskap`-behov. */
+        /** Slik sparkel-medlemskap og behovsakkumulatoren løser et `Medlemskap`-behov */
         fun løsMedlemskapsbehov(
             behov: JsonNode,
             svar: String,
