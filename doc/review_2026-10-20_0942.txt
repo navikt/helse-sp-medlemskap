@@ -1,0 +1,88 @@
+Review av sp-medlemskap (omskriving av sp-vilkarsproving fra opptjening til medlemskap)
+Dato: 2026-10-20 09:42
+Grunnlag: commit f6d2ba6 ("WIP copilot's første iterasjon medlemskapversjon av sp-vilkarsproving")
+
+Hovedinntrykk
+=============
+Omskrivingen ser bra og fornuftig ut. Alle 213 testene er grønne, og det er ikke noe igjen av
+opptjening/aareg i koden, bare i README-en, der det er ment å stå. Domenet er enklere enn i
+sp-vilkarsproving, som passer når det bare finnes én vei: spør medlemskapstjenesten og vent på
+svaret.
+
+Det som er bra
+==============
+- Kontrakten mot sparkel-medlemskap stemmer:
+  - Behovsformatet Medlemskap.medlemskapPeriodeFom/Tom og vedtaksperiodeId er det
+    sparkel-medlemskap leser.
+  - Svarverdiene JA/NEI/UAVKLART/UAVKLART_MED_BRUKERSPORSMAAL matcher
+    @løsning.Medlemskap.resultat.svar.
+  - De vanlige Medlemskap-løsningene som Spleis selv ber om, blir filtrert bort fordi de mangler
+    medlemskapsprøvingId.
+- erOk er true for alt unntatt Nei. Det stemmer med Spleis, der uavklart gir varsel og ikke avslag.
+- En saksbehandler kan bare konkludere med Ja eller Nei, og det er sikret både i domenet og i
+  API-et.
+- Publisering til Kafka skjer etter commit i river-flyten, og prøvinger som venter blir spurt på
+  nytt når Spleis sender behovet igjen.
+- Tilstanden STARTET er fjernet. Den ble heller aldri lagret i sp-vilkarsproving, og den ville ikke
+  gitt noen ekte garanti: databaseskriving og Kafka-publisering kan ikke gjøres atomisk sammen.
+
+Funn
+====
+
+1. Prøvinger startet fra REST kan bli stående fast i VENTER_PÅ_GRUNNLAG
+   PostNyAutomatiskVilkårsvurderingBehandler publiserer behovet før REST-transaksjonen er
+   committet. To ting kan gå galt:
+   - Svaret kommer før commit. Da gir IngenPrøvingFunnet en loggError, og svaret blir forkastet.
+   - Sparkel-medlemskap feiler. Den logger feilen og svarer ikke.
+   I begge tilfeller blir prøvingen aldri fullført, og nye forsøk får 409 PrøvingPågår for alltid.
+   I Spleis-flyten løser det seg fordi behovet sendes på nytt, men REST-flyten har ingen slik
+   mekanisme. Det er arvet fra sp-vilkarsproving, men treffer oftere her fordi medlemskap alltid
+   går via et asynkront oppslag.
+   To mulige løsninger:
+   - Legg behovet i outbox.
+   - La en ny REST-bestilling sende behovet på nytt for en prøving som pågår, i stedet for å svare
+     409.
+
+2. En automatisk vurdering kan overstyre en manuell
+   Rekkefølgen er:
+   - En prøving startes.
+   - Saksbehandler lagrer en manuell vurdering.
+   - Svaret fra medlemskapstjenesten kommer.
+   Da blir den nye automatiske vurderingen den gjeldende, siden den har nyest vurdert_tidspunkt.
+   Den manuelle vurderingen blir dermed overstyrt uten at noen merker det, og i REST-flyten blir
+   det også sendt endret_medlemskapsvurdering til Spleis. Også dette er arvet.
+   Forslag: la en manuell vurdering avslutte eller avbryte en prøving som pågår, eller la
+   behandleGrunnlag… la være å lage en vurdering hvis det finnes en nyere enn prøving.startet.
+
+   Gjelder også sp-vilkarsproving, men bare for arbeidstakere:
+   - behandleGrunnlagForAutomatiskArbeidstakerOpptjeningsvurdering og
+     behandleGrunnlagForNyArbeidstakerOpptjeningsvurdering avviser bare grunnlaget hvis prøvingen
+     allerede er avsluttet. De sjekker ikke om det har kommet en nyere vurdering etter at prøvingen
+     startet.
+   - Den manuelle vurderingen ser ikke på prøvinger som pågår. Den bare lagrer.
+   - gjeldende er den med nyest vurdert_tidspunkt. Når arbeidsforholdene kommer etter den manuelle
+     vurderingen, blir den automatiske vurderingen den gjeldende og overstyrer saksbehandlers
+     vurdering.
+   Selvstendig næringsdrivende er ikke berørt. Der fullføres prøvingen med en gang i start(), så
+   den venter aldri på grunnlag.
+   I sp-medlemskap venter derimot alle prøvinger på grunnlag, så der kan det skje i alle saker. I
+   sp-vilkarsproving er vinduet kort, siden aareg-oppslaget vanligvis svarer raskt. Feilen er den
+   samme i begge appene og kan rettes på samme måte.
+
+3. Oppslagsperioden ved ny vurdering kan bli for smal
+   Hvis skjæringstidspunktet aldri er prøvd i appen (for eksempel ved migrering eller manuell
+   vurdering), spørres det bare om én dag (stp..stp). Spleis spør om hele vedtaksperioden. Vurder å
+   ta perioden inn i requesten.
+
+4. Avhengigheter til Spleis som ikke finnes ennå
+   - Endepunktet POST /api/medlemskapsvurderinger.
+   - En id per medlemskapsvurdering i vilkårsgrunnlaget.
+   - Behovene Medlemskapsvurdering og MedlemskapsvurderingResultat.
+   I tillegg er PersonAvstemmingRiver kommentert ut i App.kt.
+
+5. Mindre ting
+   - KDoc-en i SpleisClient viser til seg selv: «motstykket til POST /api/medlemskapsvurderinger».
+     Det skal sannsynligvis være opptjeningsendepunktet.
+   - At vurderinger fra Infotrygd alltid blir Ja er en antakelse som bør bekreftes faglig.
+   - MedlemskapsvurderingResultatRiver logger feil og fortsetter uten å svare, så Spleis venter
+     til neste påminnelse. Det er arvet og greit, men verdt å vite om.
