@@ -55,15 +55,15 @@ jobs:
       id-token: write # for nais login
       security-events: write # push sarif to github security
 
-#  deploy-dev:
-#    name: Deploy til dev
-#    needs: bygg-image
-#    uses: navikt/sykepenger-github-workflows/.github/workflows/deploy-v2.yml@fc1bc4b862baacc4b4d8e0519bf3dc9040a2e644 # v1.0.11
-#    with:
-#      manifest: .nais/opprydding-dev.yaml
-#      environment: dev-gcp
-#      image: ${{ needs.bygg-image.outputs.image_ref }}
-#      extra_manifests: .nais/dev-db-policy.yaml
-#    permissions:
-#      contents: read
-#      id-token: write # for nais login
+  deploy-dev:
+    name: Deploy til dev
+    needs: bygg-image
+    uses: navikt/sykepenger-github-workflows/.github/workflows/deploy-v2.yml@fc1bc4b862baacc4b4d8e0519bf3dc9040a2e644 # v1.0.11
+    with:
+      manifest: .nais/opprydding-dev.yaml
+      environment: dev-gcp
+      image: ${{ needs.bygg-image.outputs.image_ref }}
+      extra_manifests: .nais/dev-db-policy.yaml
+    permissions:
+      contents: read
+      id-token: write # for nais login
