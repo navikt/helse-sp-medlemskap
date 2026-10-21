@@ -229,7 +229,21 @@ Senere fikk API-et et beste anslag på `opprettet`. Det er tidspunktet for histo
 +    }
 ```
 
-**Hvorfor:** Når vurderingen ligger i en annen app, kan saksbehandler endre den uten at Spleis vet om det. Spleis må få beskjed for å revurdere. Hendelsen kom før steg 4, slik at kanalen var klar før Spleis begynte å bruke svaret fra den nye appen.
+**Hvorfor:** Når vurderingen ligger i en annen app, kan saksbehandler endre den uten at Spleis vet om det. Spleis må få beskjed for å revurdere. For opptjening kom hendelsen før steg 4, men det var ikke nødvendig.
+
+### Når kan kanalen for endrede vurderinger utsettes
+
+Steg 3 kan vente til den nye appen faktisk skal publisere nye vurderinger. Steg 4 trenger ikke kanalen:
+
+- Resultat-behovet slår opp på id-en som står på grunnlaget, ikke på skjæringstidspunktet. Den nye appen svarer med vurderingen den har lagret for den id-en, eller henter den fra spleis-api. Spleis får altså det samme svaret som før, og beregningen endrer seg ikke.
+- Uten kanalen fortsetter Spleis å spørre om den gamle id-en. En ny vurdering i den nye appen får ny id, og Spleis får ikke vite om den.
+
+Kanalen må likevel være i prod før den nye appen lager nye vurderinger i prod:
+
+- Ellers starter ikke en manuell vurdering revurdering i Spleis.
+- Meldinger går tapt. sp-medlemskap publiserer `endret_medlemskapsvurdering` fra en outbox og markerer meldingen som sendt så snart den ligger på Kafka (`OutboxPubliseringsjobb`), også når ingen i Spleis lytter. Slike meldinger må sendes på nytt manuelt.
+
+Utsetter du steg 3, må publiseringen av endrede vurderinger være skrudd av i prod, for eksempel bak en toggle, til Spleis har riveren.
 
 ## Steg 4: Spleis spør den nye appen om resultatet
 
@@ -440,7 +454,7 @@ Oppskriften passer for alle vilkår der Spleis lagrer et resultat på vilkårsgr
 1. **Bygg den nye appen og deploy den i dev.** Den skal kunne svare på to behov: ett som lager en vurdering og returnerer id-en, og ett som returnerer resultatet for en id.
 2. **Gi alle vilkårsgrunnlag en id i Spleis.** Bruk en deterministisk id i JSON-migreringen, for eksempel `UUID.nameUUIDFromBytes("$vilkårsgrunnlagId:<Vilkår>")`. Registrer migreringen og gi nye grunnlag tilfeldig id i samme commit og samme deploy (se [steg 1](#steg-1-id-på-alle-vilkårsgrunnlag)). Ta med Infotrygd-grunnlag. Finn alle hendelser i `kopierMed` som skal gi ny id, før migreringen går i prod.
 3. **Eksponer id-en og den gamle vurderingen.** Legg id-en i Spanner og Speil. Lag et endepunkt i spleis-api som returnerer vurderingen for alle id-er til en person, med `opprettet` og hvilken kilde den kommer fra. Gi den nye appen tilgang.
-4. **Lag `endret_<vilkår>vurdering`** i `EndretVurderingPåSkjæringstidspunkt`, slik at grunnlaget får ny id og blir revurdert.
+4. **Lag `endret_<vilkår>vurdering`** i `EndretVurderingPåSkjæringstidspunkt`, slik at grunnlaget får ny id og blir revurdert. Steget kan vente til den nye appen faktisk skal publisere nye vurderinger, men må være i prod før det skjer (se [Når kan kanalen utsettes](#når-kan-kanalen-for-endrede-vurderinger-utsettes)).
 5. **Lag reserveløsningen i den nye appen.** Når id-en er ukjent, hentes svaret fra Spleis-API-et. Deploy i prod.
 6. **Send `<Vilkår>vurderingResultat` fra Spleis ved beregning, bak toggle.** Bruk svaret i stedet for Spleis sitt eget. Dev først, så prod. Fjern toggle og reserveløsning i Spleis når det går bra.
 7. **Send `<Vilkår>vurdering` ved vilkårsprøving, bak toggle.** Lagre id-en på det nye grunnlaget. Sammenlign med Spleis sitt svar i en periode, og la Spleis vinne ved avvik.
@@ -455,6 +469,26 @@ Reglene som gjør rekkefølgen trygg:
 - Det nye svaret brukes bare for nye grunnlag. Det gamle svaret ligger igjen i Spleis til historikken er migrert.
 - Alt som endrer oppførsel, ligger bak en toggle og går i dev før prod.
 - Felter i personmodellen fjernes ikke før migreringen er komplett. Spleis skriver hele personen på nytt fra modellen, så et felt som er borte fra modellen, forsvinner også fra databasen.
+- Én id gir alltid samme svar. Se under.
+
+### Kontrakten: én id gir alltid samme svar
+
+Den nye appen skal aldri endre svaret for en id den har gitt ut. En ny vurdering av samme skjæringstidspunkt får ny id. Hele modellen bygger på dette.
+
+Id-en ligger på vilkårsgrunnlaget, og alle perioder med samme skjæringstidspunkt bruker samme grunnlag. Spleis spør om resultatet ved hver beregning. En forlengelse spør derfor om den samme id-en som perioden før, og får samme svar. Reserveløsningen gir også samme svar: Spleis bruker statusen på grunnlaget, og den nye appen henter ukjente id-er fra spleis-api, som leser den samme statusen.
+
+Det finnes to måter å få et nytt svar på, og begge gir ny id:
+
+- **Nytt vilkårsgrunnlag**, for eksempel når skjæringstidspunktet flytter seg. Spleis vilkårsprøver på nytt, og grunnlaget får ny id.
+- **Ny vurdering i den nye appen.** Appen publiserer `endret_<vilkår>vurdering` med den nye id-en. Spleis lager et nytt grunnlag med id-en og revurderer alle perioder fra skjæringstidspunktet, også de som er utbetalt (se [steg 3](#steg-3-kanal-for-endrede-vurderinger)).
+
+Bryter appen kontrakten, kan perioder med samme grunnlag få ulike svar uten at Spleis merker det. Eksempel: den første perioden er utbetalt med `JA`, og så svarer appen `NEI` på samme id i forlengelsen. Spleis beregner bare perioder som ikke er ferdig behandlet (`perioderDetSkalBeregnesUtbetalingFor`). Forlengelsen får derfor avviste dager, mens den utbetalte perioden blir stående. Ingenting starter revurdering, fordi id-en på grunnlaget er den samme. `medEndret<Vilkår>vurdering` ignorerer i tillegg en endring som kommer med en id som allerede er lagt til grunn.
+
+sp-medlemskap håndhever kontrakten:
+
+- `PostgresMedlemskapsvurderingRepository.lagre` setter bare inn rader. Lagrer appen samme id to ganger, kaster den «Vurderinger er immutable».
+- `Medlemskapsvurdering.automatisk` og `avSaksbehandler` lager alltid ny id.
+- `MedlemskapsvurderingResultatRiver` slår opp med `finn(id)` og aldri med `gjeldende(fødselsnummer, skjæringstidspunkt)`. Et oppslag på gjeldende vurdering ville gitt et nytt svar på gammel id så snart en ny vurdering var lagret.
 
 ## Steg for steg for medlemskap
 
@@ -475,10 +509,31 @@ Dette er stort sett gjort. sp-medlemskap svarer på `Medlemskapsvurdering` og `M
 - Lag JSON-migreringen `V348LeggeTilMedlemskapsvurderingId` (V347 er siste nå, sjekk før du lager den). Bruk `UUID.nameUUIDFromBytes("$vilkårsgrunnlagId:Medlemskap")`, også for Infotrygd-grunnlag.
 - Legg `medlemskapsvurderingId` i `VilkårsgrunnlagElement`, inn- og ut-DTO-ene, `PersonData` og `PersonDataBuilder`.
 - Gi nye grunnlag `UUID.randomUUID()` i `Vilkårsgrunnlag.kt`. Gjør det i samme commit som du registrerer migreringen i `SerialisertPerson`. Migreringsklassen og testen kan gjerne komme i en egen commit før, så lenge migreringen ikke er registrert.
-- Legg `nyMedlemskapsvurderingId` i `kopierMed`. Avklar hvilke hendelser som skal gi ny id. Spleis har i dag ingen overstyring av medlemskap, men sjekk om nytt skjæringstidspunkt skal gi ny vurdering.
+- La `kopierMed` beholde `medlemskapsvurderingId`. Medlemskap trenger ikke `nyMedlemskapsvurderingId` ennå (se under).
 - Skriv en test tilsvarende `OpptjeningsvurderingIdTest` før migreringen går i prod.
 
 Id-en i migreringen må være deterministisk fordi spleis-api bare kan lese og kjører migreringen i minnet ved hvert oppslag. Se [steg 1](#steg-1-id-på-alle-vilkårsgrunnlag).
+
+Steget er gjort i [`e19958c`](https://github.com/navikt/helse-spleis/commit/e19958c02c). Testene ligger i `sykepenger-model/.../spleis/e2e/MedlemskapsvurderingIdTest.kt`.
+
+#### Hvorfor medlemskap ikke får samme feil som V345
+
+V346 måtte skrive opptjenings-id-ene på nytt fordi overstyring av arbeidsforhold endret opptjeningen i `kopierMed`, men beholdt den gamle id-en. Statusen og id-en pekte da på ulike vurderinger.
+
+For medlemskap kan ikke dette skje i dag:
+
+- `kopierMed` har ikke noe parameter for medlemskap. Den kopierer alltid både `medlemskapstatus` og `medlemskapsvurderingId` fra det gamle grunnlaget.
+- Medlemskapet endres bare når medlemskapstjenesten svarer på nytt. Svaret kommer i `VilkårsgrunnlagMessage`, og `Vilkårsgrunnlag.valider()` lager da et nytt grunnlag med ny tilfeldig id. Status og id byttes alltid samtidig.
+- `EndretVurderingPåSkjæringstidspunkt` støtter bare `Forsikringsvurdering` og `Opptjeningsvurdering`, ikke medlemskap.
+
+Overstyring av arbeidsforhold spør ikke medlemskapstjenesten på nytt, så statusen er den samme. Da er det riktig å beholde id-en, fordi den peker på vurderingen som faktisk brukes. Testene i `MedlemskapsvurderingIdTest` låser begge tilfellene:
+
+- `Overstyring av arbeidsforhold beholder medlemskapsvurderingId`: kopien beholder id-en.
+- `nytt skjæringstidspunkt gir ny medlemskapsvurderingId`: Spleis vilkårsprøver på nytt og lager ny id.
+
+Den andre testen går gjennom `Vilkårsgrunnlag` og ikke gjennom `kopierMed`. Den viser at Spleis spør på nytt når skjæringstidspunktet flytter seg, men den ville ikke fanget en feil som den bak V345.
+
+Ny id i `kopierMed` blir først aktuelt i [steg 4](#4-endret_medlemskapsvurdering). Se også forbeholdet om nullable id i [steg 7](#7-medlemskapsvurdering-ved-vilkårsprøving-bak-toggle).
 
 ### 3. Eksponer id-en og medlemskapstatusen
 
@@ -486,22 +541,26 @@ Id-en i migreringen må være deterministisk fordi spleis-api bare kan lese og k
 - Lag `POST /api/medlemskapsvurderinger` i spleis-api med kontrakten sp-medlemskap venter: `{ medlemskapsvurderinger: [{ medlemskapsvurderingId, opprettet, skjæringstidspunkt, kilde: SPLEIS|INFOTRYGD, medlemskapstatus?: JA|NEI|VET_IKKE|UAVKLART_MED_BRUKERSPORSMAAL }] }`. Bruk logikken for `opprettet` fra [`d99ba29`](https://github.com/navikt/helse-spleis/commit/d99ba29dbf96d9f50439e1f00fc99b416edd99eb).
 - Gi sp-medlemskap tilgang inn til spleis-api i `.nais/spleis-api.yaml`.
 
+Endepunktet og tilgangen er laget i `sykepenger-api/.../spleis/medlemskap/MedlemskapApi.kt`, med tester i `MedlemskapsvurderingApiTest` og `MedlemskapsvurderingerTest`. Spanner og Speil gjenstår.
+
 ### 4. `endret_medlemskapsvurdering`
 
 - Legg `Medlemskapsvurdering` til i `EndretVurderingPåSkjæringstidspunktMessage.Vurderingsformat` og `Vurdering`.
-- Lag `medEndretMedlemskapsvurdering` i `Grunnlagsdata`.
+- Lag `medEndretMedlemskapsvurdering` i `Grunnlagsdata`. Gjør som `medEndretOpptjeningsvurdering`: kopier med id-en fra sp-medlemskap, og gjør ingenting hvis id-en allerede er lagt til grunn.
+- Dette er første gang `kopierMed` kan få nytt medlemskap. Send ny status og ny id inn sammen, helst som ett parameter, så det er umulig å endre statusen uten å bytte id-en. Ellers kan du gjenta feilen bak V345 og V346.
 
-Dette må være på plass før steg 6. Ellers vil manuelle vurderinger i sp-medlemskap ikke starte revurdering i Spleis.
+Dette må være på plass i prod før sp-medlemskap begynner å lage nye vurderinger og publisere `endret_medlemskapsvurdering` i prod. Det trenger ikke være på plass før steg 6. Se [Når kan kanalen utsettes](#når-kan-kanalen-for-endrede-vurderinger-utsettes).
 
 ### 5. Reserveløsningen i sp-medlemskap i prod
 
 - Kontroller at `MedlemskapsvurderingResultatRiver` henter fra Spleis-API-et når id-en er ukjent, og at Infotrygd-grunnlag gir `JA`.
+- Kontroller at riveren slår opp på id og aldri på gjeldende vurdering for skjæringstidspunktet (se [kontrakten](#kontrakten-én-id-gir-alltid-samme-svar)).
 - Deploy sp-medlemskap i prod med tilgang til rapiden og spleis-api.
 
 ### 6. `MedlemskapsvurderingResultat` ved beregning, bak toggle
 
 - Send behovet i `EventBusOversetter` sammen med `OpptjeningsvurderingResultat`, med `medlemskapsvurderingId` fra grunnlaget.
-- Les `svar`, ikke bare `ok`, i `YtelserMessage`. `ok` er bare `false` ved `NEI`, og da forsvinner forskjellen mellom `JA`, `VET_IKKE` og `UAVKLART_MED_BRUKERSPORSMAAL`.
+- Les `svar`, ikke bare `ok`, i `YtelserMessage`. `ok` er bare `false` ved `NEI`, og da forsvinner forskjellen mellom `JA`, `UAVKLART` og `UAVKLART_MED_BRUKERSPORSMAAL`.
 - Bruk svaret til `erMedlemAvFolketrygden` i `Vedtaksperiode`.
 - Flytt varslene `RV_MV_1` og `RV_MV_2` til beregningen. Da får saksbehandler riktig varsel også når vurderingen er endret i sp-medlemskap. Pass på at varslene ikke kommer dobbelt mens grunnlaget fortsatt gir dem ved vilkårsprøving.
 - La `medlemskapstatus` på grunnlaget være reserveløsning mens togglen er av: `ytelser.medlemskapsvurderingResultat ?: grunnlagsdata.medlemskapstatus`.
@@ -509,10 +568,20 @@ Dette må være på plass før steg 6. Ellers vil manuelle vurderinger i sp-medl
 
 Etter dette steget kan Spleis ikke beregne uten svar fra sp-medlemskap.
 
+Behovet, lesingen av svaret og reserveløsningen er laget bak togglen `MEDLEMSKAPSVURDERINGRESULTATBEHOV`. Den står som `"false"` i `.nais/spleis.dev-gcp.yaml`. Når svaret er ulikt statusen på grunnlaget, skriver Spleis en info-melding i aktivitetsloggen. Testene ligger i `MedlemskapE2E`, `YtelserRiverMappingTest` og `BehovkontraktTest`.
+
+Varslene er flyttet bak den samme togglen. `ok` er ikke nok til å velge varsel, så Spleis leser hele `svar`:
+
+- Med togglen på gir vilkårsprøvingen ingen medlemskapsvarsler. Beregningen gir `RV_MV_2` ved `NEI` og `RV_MV_1` ved `UAVKLART_MED_BRUKERSPORSMAAL`, ut fra svaret fra sp-medlemskap. Mangler svaret, brukes statusen på grunnlaget.
+- Med togglen av gir vilkårsprøvingen varslene som før, og beregningen gir ingen.
+
+Varslene kommer derfor bare én gang, og de følger statusen beregningen faktisk bruker.
+
 ### 7. `Medlemskapsvurdering` ved vilkårsprøving, bak toggle
 
 - Send `Medlemskapsvurdering { skjæringstidspunkt, medlemskapPeriodeFom, medlemskapPeriodeTom }` i stedet for `Medlemskap`, og lagre `@løsning.Medlemskapsvurdering.id` på det nye grunnlaget.
 - `VilkårsgrunnlagRiver` krever i dag `Medlemskap.skjæringstidspunkt` og leser `@løsning.Medlemskap.resultat.svar`. Når togglen er på, må riveren tåle at disse mangler.
+- Gjør som [`d8558c8`](https://github.com/navikt/helse-spleis/commit/d8558c8dc7fdf4a16ccb5a703a975cbf652e508e) gjorde for opptjening: Legg til `medlemskapsvurderingId: UUID?` i `Vilkårsgrunnlag`, og bruk `medlemskapsvurderingId ?: UUID.randomUUID()`. Id-en må være nullable fordi togglen først er på i dev, og fordi et behov sendt før togglen ble slått på, kan få en løsning uten id. Feltet på grunnlaget er fortsatt påkrevd. Fjern reserveverdien når togglen er på i prod og alle gamle behov er besvart.
 
 Her skiller medlemskap seg fra opptjening. For opptjening regnet Spleis fortsatt ut svaret selv, så sammenligningen var gratis. For medlemskap betyr sammenligning at både Spleis og sp-medlemskap sender `Medlemskap` til sparkel-medlemskap, altså to oppslag mot LovMe for hver vilkårsprøving. Velg en av disse:
 
