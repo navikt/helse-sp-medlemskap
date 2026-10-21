@@ -10,9 +10,9 @@ internal class DataSourceBuilder(
     private val gcpProjectId: String = env.envValue("GCP_TEAM_PROJECT_ID")
     private val databaseRegion: String = env.envValue("DATABASE_REGION")
     private val databaseInstance: String = env.envValue("DATABASE_INSTANCE")
-    private val databaseUsername: String = env.envValue("DATABASE_SP_medlemskap_OPPRYDDING_DEV_USERNAME")
-    private val databasePassword: String = env.envValue("DATABASE_SP_medlemskap_OPPRYDDING_DEV_PASSWORD")
-    private val databaseName: String = env.envValue("DATABASE_SP_medlemskap_OPPRYDDING_DEV_DATABASE")
+    private val databaseUsername: String = env.envValue("DATABASE_SP_MEDLEMSKAP_OPPRYDDING_DEV_USERNAME")
+    private val databasePassword: String = env.envValue("DATABASE_SP_MEDLEMSKAP_OPPRYDDING_DEV_PASSWORD")
+    private val databaseName: String = env.envValue("DATABASE_SP_MEDLEMSKAP_OPPRYDDING_DEV_DATABASE")
 
     private fun Map<String, String>.envValue(key: String) = requireNotNull(get(key)) { "$key must be set" }
 
