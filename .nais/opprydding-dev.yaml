@@ -28,7 +28,6 @@ spec:
       destinations:
         - id: elastic
         - id: loki
-        - id: team_logs
   resources:
     requests:
       cpu: 50m
