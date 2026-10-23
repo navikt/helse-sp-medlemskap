@@ -419,6 +419,8 @@ Så i prod ([`72fa081`](https://github.com/navikt/helse-sp-vilkarsproving/commit
 
 **Hvorfor sist:** Migreringen leser fra API-et i steg 3 og bruker id-ene fra steg 2, så begge må være stabile først. Den kjører per person når personen dukker opp, ikke alt på én gang. Det sprer lasten, men vær forberedt på at volumet fra `person_avstemming` kan bli høyt. Det var trolig derfor den ble skrudd av og på i prod.
 
+**Steg 7 må være på før migreringen starter, og kan ikke rulles tilbake etterpå.** En person migreres bare én gang. Hvis Spleis igjen lager vurderinger etter migreringen, blir de aldri hentet over, og den nye appen mangler dem. Da må personen slettes fra migreringsloggen i sp-vilkarsproving, slik at personen kan migreres på nytt.
+
 ## Steg 9: Id-en i godkjenningsbehovet
 
 **Hva:** `opptjeningsvurderingId` ble lagt i `Godkjenningsbehov` ([`b487c18`](https://github.com/navikt/helse-spleis/commit/b487c184c164dd66b70a6474117f39ebaf311bc3)).
