@@ -1,5 +1,5 @@
 [versions]
-flyway = "13.10.0"
+flyway = "13.10.3"
 kotlinx-coroutines = "1.11.0"
 # Må følge Kotlin-versjonen som no.nav.sykepenger.kotlin-pluginen bruker
 kotlin = "2.4.21"
@@ -34,7 +34,7 @@ ktor-server-resources = { module = "io.ktor:ktor-server-resources", version.ref 
 ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", version.ref = "ktor" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 sykepenger-logging = { module = "no.nav.sykepenger.libs:logging", version.ref = "sykepenger-logging" }
-mock-oauth2-server = "no.nav.security:mock-oauth2-server:6.0.7"
+mock-oauth2-server = "no.nav.security:mock-oauth2-server:6.0.8"
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 smiley4-ktor-openapi = { module = "io.github.smiley4:ktor-openapi", version.ref = "smiley4-ktor-openapi-tools" }
 smiley4-ktor-swagger-ui = { module = "io.github.smiley4:ktor-swagger-ui", version.ref = "smiley4-ktor-openapi-tools" }
