@@ -16,7 +16,6 @@ import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForNyMedlemskapsvu
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingResultatRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.OutboxPubliseringsjobb
-import no.nav.helse.sykepenger.medlemskap.infra.kafka.PersonAvstemmingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetMedlemskapshistorikkBehandler
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetSaksbehandlerhandlingVisningBehandler
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetVilkårsvurderingerForPersonBehandler
