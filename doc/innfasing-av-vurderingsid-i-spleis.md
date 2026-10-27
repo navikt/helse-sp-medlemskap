@@ -524,8 +524,8 @@ Status for hvert steg:
 | 3. Eksponer id-en og den gamle vurderingen | Endepunktet er laget. Spanner og Speil gjenstår |
 | 4. Kanal for endrede vurderinger | Ikke startet. Kan vente til sp-medlemskap skal publisere nye vurderinger |
 | 5. Reserveløsningen i den nye appen | Laget i sp-medlemskap. Ikke i prod |
-| 6. Spleis spør den nye appen om resultatet | Laget bak toggle, av i dev |
-| 7. Den nye appen gjør vurderingen | Ikke startet |
+| 6. Spleis spør den nye appen om resultatet | Laget bak toggle, på i dev |
+| 7. Den nye appen gjør vurderingen | Laget i Spleis bak toggle, på i dev. Sender både `Medlemskap` og `Medlemskapsvurdering` |
 | 8. Migrer historikken | `PersonAvstemmingRiver` finnes, men er kommentert ut i `App.kt` |
 | 9. Id-en i godkjenningsbehovet | Ikke startet |
 | 10. Rydd opp | Ikke startet |
@@ -613,13 +613,22 @@ Varslene kommer derfor bare én gang, og de følger statusen beregningen faktisk
 
 Behovet heter `Medlemskapsvurdering` og sendes ved vilkårsprøving, bak toggle.
 
-- Send `Medlemskapsvurdering { skjæringstidspunkt, medlemskapPeriodeFom, medlemskapPeriodeTom }` i stedet for `Medlemskap`, og lagre `@løsning.Medlemskapsvurdering.id` på det nye grunnlaget.
-- `VilkårsgrunnlagRiver` krever i dag `Medlemskap.skjæringstidspunkt` og leser `@løsning.Medlemskap.resultat.svar`. Når togglen er på, må riveren tåle at disse mangler.
+- Send `Medlemskapsvurdering { skjæringstidspunkt, medlemskapPeriodeFom, medlemskapPeriodeTom }` i tillegg til `Medlemskap`, og lagre `@løsning.Medlemskapsvurdering.id` på det nye grunnlaget.
+- Behold `Medlemskap` så lenge statusen på grunnlaget trengs. sp-medlemskap svarer bare med `id`, men `medlemskapstatus` på grunnlaget er påkrevd og brukes av Speil, spleis-api og reserveløsningen i steg 6.
 - Gjør som [`d8558c8`](https://github.com/navikt/helse-spleis/commit/d8558c8dc7fdf4a16ccb5a703a975cbf652e508e) gjorde for opptjening: Legg til `medlemskapsvurderingId: UUID?` i `Vilkårsgrunnlag`, og bruk `medlemskapsvurderingId ?: UUID.randomUUID()`. Id-en må være nullable fordi togglen først er på i dev, og fordi et behov sendt før togglen ble slått på, kan få en løsning uten id. Feltet på grunnlaget er fortsatt påkrevd. Fjern reserveverdien når togglen er på i prod og alle gamle behov er besvart.
+
+Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`, som står som `"false"` i `.nais/spleis.dev-gcp.yaml`:
+
+- `EventBusOversetter` sender `Medlemskapsvurdering` sammen med `Medlemskap` når togglen er på.
+- `VilkårsgrunnlagRiver` er `interestedIn` i `@løsning.Medlemskapsvurdering.id`. Behovet står ikke i riverens behovliste, så løsninger uten det nye behovet blir fortsatt plukket opp.
+- `Vilkårsgrunnlag` har fått `medlemskapsvurderingId: UUID?` og bruker `medlemskapsvurderingId ?: UUID.randomUUID()`.
+- Testene ligger i `MedlemskapsvurderingIdTest`, `VilkårsgrunlagRiverMappingTest` og `BehovkontraktTest`.
+
+Med togglen på kan statusen på grunnlaget og id-en peke på ulike vurderinger. Statusen kommer fra et nytt oppslag i sparkel-medlemskap, mens sp-medlemskap gjenbruker den gjeldende vurderingen hvis den alt har en for skjæringstidspunktet. Når steg 6 er på, bruker beregningen svaret for id-en, og Spleis skriver en info-melding i aktivitetsloggen ved avvik. Speil og spleis-api viser fortsatt statusen på grunnlaget til steg 3 og Speil leser fra sp-medlemskap.
 
 Her skiller medlemskap seg fra opptjening. For opptjening regnet Spleis fortsatt ut svaret selv, så sammenligningen var gratis. For medlemskap betyr sammenligning at både Spleis og sp-medlemskap sender `Medlemskap` til sparkel-medlemskap, altså to oppslag mot LovMe for hver vilkårsprøving. Velg en av disse:
 
-- Avklar med LovMe at dobbelt volum er greit i en periode, og sammenlign som i [steg 7](#steg-7-den-nye-appen-gjør-vurderingen).
+- Avklar med LovMe at dobbelt volum er greit i en periode, og sammenlign som i [steg 7](#steg-7-den-nye-appen-gjør-vurderingen). Spleis sender allerede begge behovene når togglen er på. Skal Spleis vinne ved avvik, må sammenligningen ligge i `MedlemskapsvurderingResultatRiver` i sp-medlemskap, slik [`a0329a9`](https://github.com/navikt/helse-sp-vilkarsproving/commit/a0329a91d199f415cbe3bf03f7b28a972853cdc9) gjorde for opptjening.
 - Hopp over sammenligningen. sp-medlemskap gjør det samme oppslaget som Spleis gjør i dag, så risikoen er mindre enn for opptjening, der vurderingslogikken var skrevet på nytt.
 
 ### 8. Migrer historikken

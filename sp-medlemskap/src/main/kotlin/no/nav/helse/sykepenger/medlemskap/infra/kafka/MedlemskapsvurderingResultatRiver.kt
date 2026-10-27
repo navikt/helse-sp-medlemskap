@@ -17,6 +17,12 @@ import no.nav.sykepenger.libs.logging.loggError
 import no.nav.sykepenger.libs.logging.loggInfo
 import no.nav.sykepenger.libs.logging.medMdc
 
+/**
+ * Svarer på resultatet for en bestemt medlemskapsvurderingId. Kontrakt: én id gir alltid samme svar.
+ * Spleis spør om id-en på vilkårsgrunnlaget ved hver beregning, også for forlengelser. Slå derfor
+ * alltid opp med id, aldri gjeldende vurdering for skjæringstidspunktet. En ny vurdering skal ha ny id
+ * og sendes som endret_medlemskapsvurdering, slik at Spleis bytter id og revurderer.
+ */
 internal open class MedlemskapsvurderingResultatRiver(
     rapidsConnection: RapidsConnection,
     private val transaksjonProvider: TransaksjonProvider<Transaksjonskontekst>,

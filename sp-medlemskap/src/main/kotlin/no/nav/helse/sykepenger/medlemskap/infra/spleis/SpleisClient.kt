@@ -83,8 +83,7 @@ internal class SpleisClient(
         /**
          * Responsen fra `POST /api/medlemskapsvurderinger` i spleis-api.
          *
-         * Endepunktet finnes ikke i Spleis ennå. Kontrakten er tenkt som motstykket til
-         * `POST /api/medlemskapsvurderinger`: ett innslag per medlemskapsvurdering Spleis har lagt til grunn
+         * Kontrakten er motstykket til `POST /api/opptjeningsvurderinger`: ett innslag per medlemskapsvurdering Spleis har lagt til grunn
          * i et vilkårsgrunnlag, med en id Spleis også sender med i behovet `MedlemskapsvurderingResultat`.
          */
         @JsonIgnoreProperties(ignoreUnknown = true)
