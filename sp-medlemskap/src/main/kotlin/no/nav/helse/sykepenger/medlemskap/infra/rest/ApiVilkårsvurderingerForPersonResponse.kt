@@ -50,11 +50,12 @@ internal enum class ApiMedlemskapsstatus {
 internal sealed interface ApiVurderingskilde {
     val kildetype: ApiKildetype
 
-    /** Vurdert ut fra svaret fra medlemskapstjenesten for [oppslagsperiode]. */
+    /** Vurdert ut fra svaret fra medlemskapstjenesten for [oppslagsperiode]. [årsaker] forklarer hvorfor svaret ble uavklart. */
     @Serializable
     data class Automatisk(
         val versjonAvKildekode: String,
         val oppslagsperiode: ApiPeriode,
+        val årsaker: List<ApiÅrsak> = emptyList(),
     ) : ApiVurderingskilde {
         override val kildetype: ApiKildetype = ApiKildetype.AUTOMATISK
     }
@@ -99,4 +100,10 @@ internal enum class ApiKildetype {
 internal data class ApiPeriode(
     val fom: LocalDate,
     val tom: LocalDate,
+)
+
+@Serializable
+internal data class ApiÅrsak(
+    val regelId: String,
+    val forklaringPaaUavklart: String,
 )

@@ -49,6 +49,7 @@ private fun Vurderingskilde.tilApi(): ApiVurderingskilde =
             ApiVurderingskilde.Automatisk(
                 versjonAvKildekode = versjonAvKildekode,
                 oppslagsperiode = ApiPeriode(fom = oppslagsperiode.start, tom = oppslagsperiode.endInclusive),
+                årsaker = aarsaker.orEmpty().map { ApiÅrsak(regelId = it.regelId, forklaringPaaUavklart = it.forklaringPaaUavklart) },
             )
 
         is Vurderingskilde.Saksbehandler ->

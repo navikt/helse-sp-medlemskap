@@ -6,6 +6,7 @@ import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -25,6 +26,21 @@ internal class VurderingsresponsTest {
         assertEquals(vurdering.id.value, krav.id)
         assertEquals(ApiKravkode.MEDLEMSKAP, krav.kravkode)
         assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), krav.kilde)
+    }
+
+    @Test
+    fun `automatisk vurdering viser årsakene`() {
+        val vurdering =
+            Medlemskapsprøving
+                .start(FNR, 1.februar, 1.januar til 31.januar)
+                .motta(Medlemskapsstatus.Uavklart, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
+
+        val krav = Vurderingsrespons.fra(vurdering).krav.single()
+
+        assertEquals(
+            ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar), listOf(ApiÅrsak("REGEL_3", "Forklaring"))),
+            krav.kilde,
+        )
     }
 
     @ParameterizedTest

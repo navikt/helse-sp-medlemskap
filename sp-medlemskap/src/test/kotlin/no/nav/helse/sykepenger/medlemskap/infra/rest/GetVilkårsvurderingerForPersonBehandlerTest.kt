@@ -33,6 +33,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.get
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
 import no.nav.helse.til
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import tools.jackson.module.kotlin.jacksonObjectMapper
 import java.time.Instant
@@ -230,6 +231,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             val kilde = krav["kilde"]
             assertEquals("AUTOMATISK", kilde["kildetype"].asString()) { "Uten diskriminator kan Speil ikke se hvilken kilde den fikk: $kilde" }
             assertEquals("2024-02-01", kilde["oppslagsperiode"]["fom"].asString())
+            assertTrue(kilde["årsaker"].isArray) { "Speil forventer årsaker som en liste, også når den er tom: $kilde" }
 
             // Diskriminatoren er både en deklarert property og en Jackson-annotasjon. Skrives den to
             // ganger, er json-en i praksis ødelagt for strengt validerende konsumenter.
