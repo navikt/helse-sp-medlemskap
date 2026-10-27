@@ -6,6 +6,7 @@ import com.github.navikt.tbd_libs.rapids_and_rivers.asLocalDate
 import no.nav.helse.Periode
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
+import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import tools.jackson.databind.JsonNode
 import java.time.LocalDate
 
@@ -19,6 +20,7 @@ import java.time.LocalDate
 internal object Medlemskapsbehov {
     const val NAVN = "Medlemskap"
     private const val SVARFELT = "@løsning.$NAVN.resultat.svar"
+    private const val AARSAKERFELT = "@løsning.$NAVN.resultat.aarsaker"
 
     // https://github.com/navikt/medlemskap-sykepengerlytter/blob/e4abb7bd5796357e9fe9bc1e6da77506f761c560/src/main/kotlin/no/nav/medlemskap/sykepenger/lytter/speil_medlemskapsvurdering/SpeilRespons.kt#L5-L10
     private val svar =
@@ -67,10 +69,28 @@ internal object Medlemskapsbehov {
             validate {
                 it.require("skjæringstidspunkt", JsonNode::asLocalDate)
                 it.requireAny(SVARFELT, svar.keys.toList())
+                it.interestedIn(AARSAKERFELT, ::lesAarsaker)
             }
         }
 
     fun JsonMessage.medlemskapsstatus(): Medlemskapsstatus = svar.getValue(this[SVARFELT].asString())
+
+    fun JsonMessage.aarsaker(): List<Årsak>? =
+        this[AARSAKERFELT]
+            .takeUnless { it.isMissingNode || it.isNull }
+            ?.let(::lesAarsaker)
+
+    private fun lesAarsaker(node: JsonNode): List<Årsak> {
+        require(node.isArray) { "$AARSAKERFELT må være en liste" }
+        return node.values().mapIndexed { indeks, aarsak ->
+            require(aarsak.isObject) { "$AARSAKERFELT[$indeks] må være et objekt" }
+            val regelId = aarsak.path("regelId")
+            val forklaring = aarsak.path("forklaringPaaUavklart")
+            require(regelId.isString) { "$AARSAKERFELT[$indeks].regelId må være en streng" }
+            require(forklaring.isString) { "$AARSAKERFELT[$indeks].forklaringPaaUavklart må være en streng" }
+            Årsak(regelId.asString(), forklaring.asString())
+        }
+    }
 
     fun JsonMessage.medlemskapsprøvingId() = MedlemskapsprøvingId(this["medlemskapsprøvingId"].asUUID())
 }

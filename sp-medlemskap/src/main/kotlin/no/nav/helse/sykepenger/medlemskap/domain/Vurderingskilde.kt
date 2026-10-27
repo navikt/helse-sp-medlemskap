@@ -9,6 +9,7 @@ internal sealed interface Vurderingskilde {
         val medlemskapsprøvingId: MedlemskapsprøvingId,
         val oppslagsperiode: Periode,
         val versjonAvKildekode: String,
+        val aarsaker: List<Årsak>? = null,
     ) : Vurderingskilde
 
     data class Saksbehandler(

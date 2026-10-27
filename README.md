@@ -13,7 +13,7 @@ Appen slår opp medlemskap gjennom behovet `Medlemskap`, som sparkel-medlemskap 
    ```
 2. Finnes det allerede en vurdering for personen og skjæringstidspunktet, svarer appen med en gang med `@løsning.Medlemskapsvurdering.id`.
 3. Hvis ikke, starter appen en medlemskapsprøving og sender behovet `Medlemskap` til sparkel-medlemskap. Det opprinnelige behovet ligger med i `opprinneligBehov`.
-4. Når løsningen `@løsning.Medlemskap.resultat.svar` kommer, lagrer appen vurderingen og svarer på det opprinnelige behovet med vurderingens id.
+4. Når løsningen `@løsning.Medlemskap.resultat.svar` kommer, lagrer appen vurderingen og svarer på det opprinnelige behovet med vurderingens id. Eventuelle `resultat.aarsaker` (`[{ regelId, forklaringPaaUavklart }]`) lagres i vurderingens kilde. Feltet kan mangle eller være `null`, men har det feil struktur, avvises løsningen.
 5. Spleis sender `MedlemskapsvurderingResultat { medlemskapsvurderingId }` og får tilbake `{ "svar": "JA" | "NEI" | "UAVKLART" | "UAVKLART_MED_BRUKERSPORSMAAL", "ok": true | false }`. `ok` er `false` bare når svaret er `NEI`.
 
 Vurderinger som Spleis har gjort før denne appen fantes, hentes fra Spleis ved behov og lagres som `OVERFOERT_FRA_SPLEIS` eller `OVERFOERT_FRA_INFOTRYGD`.

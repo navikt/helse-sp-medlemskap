@@ -2,6 +2,7 @@ package no.nav.helse.sykepenger.medlemskap.infra.db
 
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
+import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import no.nav.helse.til
 import tools.jackson.module.kotlin.jacksonObjectMapper
 import tools.jackson.module.kotlin.readValue
@@ -26,6 +27,7 @@ private fun Vurderingskilde.tilDto(): VurderingskildeDto =
                 oppslagFom = oppslagsperiode.start,
                 oppslagTom = oppslagsperiode.endInclusive,
                 versjonAvKildekode = versjonAvKildekode,
+                aarsaker = aarsaker?.map { ÅrsakDto(it.regelId, it.forklaringPaaUavklart) },
             )
 
         is Vurderingskilde.Saksbehandler ->
@@ -43,6 +45,7 @@ private fun VurderingskildeDto.tilVurderingskilde(): Vurderingskilde =
                 medlemskapsprøvingId = MedlemskapsprøvingId(prøvingId),
                 oppslagsperiode = oppslagFom til oppslagTom,
                 versjonAvKildekode = versjonAvKildekode,
+                aarsaker = aarsaker?.map { Årsak(it.regelId, it.forklaringPaaUavklart) },
             )
 
         is VurderingskildeDto.Saksbehandler ->

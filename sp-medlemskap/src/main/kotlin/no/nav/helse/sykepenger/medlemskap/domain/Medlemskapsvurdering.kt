@@ -23,13 +23,14 @@ internal data class Medlemskapsvurdering(
             prøving: Medlemskapsprøving,
             status: Medlemskapsstatus,
             versjonAvKode: String,
+            aarsaker: List<Årsak>? = null,
         ) = Medlemskapsvurdering(
             id = MedlemskapsvurderingId.ny(),
             fødselsnummer = prøving.fødselsnummer,
             skjæringstidspunkt = prøving.skjæringstidspunkt,
             status = status,
             vurdertTidspunkt = Instant.now(),
-            kilde = Vurderingskilde.Automatisk(prøving.id, prøving.oppslagsperiode, versjonAvKode),
+            kilde = Vurderingskilde.Automatisk(prøving.id, prøving.oppslagsperiode, versjonAvKode, aarsaker),
         )
 
         fun avSaksbehandler(

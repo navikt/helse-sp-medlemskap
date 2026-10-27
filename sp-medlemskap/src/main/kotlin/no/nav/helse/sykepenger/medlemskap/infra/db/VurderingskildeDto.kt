@@ -1,5 +1,6 @@
 package no.nav.helse.sykepenger.medlemskap.infra.db
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import java.time.LocalDate
@@ -18,6 +19,9 @@ internal sealed interface VurderingskildeDto {
         val oppslagFom: LocalDate,
         val oppslagTom: LocalDate,
         val versjonAvKildekode: String,
+        // Utelates når null, så formatet for vurderinger uten årsaker er uendret
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val aarsaker: List<ÅrsakDto>? = null,
     ) : VurderingskildeDto
 
     data class Saksbehandler(
@@ -30,3 +34,8 @@ internal sealed interface VurderingskildeDto {
 
     class OverførtFraInfotrygd : VurderingskildeDto
 }
+
+internal data class ÅrsakDto(
+    val regelId: String,
+    val forklaringPaaUavklart: String,
+)

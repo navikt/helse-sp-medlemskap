@@ -6,6 +6,7 @@ import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
+import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
@@ -28,6 +29,17 @@ internal class PostgresMedlemskapsvurderingRepositoryTest : DatabaseTest() {
         assertEquals(vurdering.copy(vurdertTidspunkt = lagret.vurdertTidspunkt), lagret)
         assertEquals(vurdering.vurdertTidspunkt.truncatedTo(ChronoUnit.MILLIS), lagret.vurdertTidspunkt.truncatedTo(ChronoUnit.MILLIS))
         assertEquals(Vurderingskilde.Automatisk(prøving.id, OPPSLAGSPERIODE, "versjon"), lagret.kilde)
+    }
+
+    @Test
+    fun `automatisk vurdering lagres med årsaker`() {
+        val aarsaker = listOf(Årsak("REGEL_3", "Forklaring"), Årsak("REGEL_19", "Annen forklaring"))
+        val vurdering = nyPrøving().motta(Medlemskapsstatus.Uavklart, versjonAvKode = "versjon", aarsaker = aarsaker)
+        lagre(vurdering)
+
+        val lagret = transaksjon { it.medlemskapsvurderinger.finn(vurdering.id) }!!
+
+        assertEquals(aarsaker, (lagret.kilde as Vurderingskilde.Automatisk).aarsaker)
     }
 
     @Test

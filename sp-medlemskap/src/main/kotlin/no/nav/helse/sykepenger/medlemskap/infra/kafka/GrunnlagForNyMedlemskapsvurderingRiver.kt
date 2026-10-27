@@ -5,15 +5,18 @@ import com.github.navikt.tbd_libs.rapids_and_rivers.River
 import com.github.navikt.tbd_libs.rapids_and_rivers.asLocalDate
 import com.github.navikt.tbd_libs.rapids_and_rivers_api.MessageContext
 import com.github.navikt.tbd_libs.rapids_and_rivers_api.MessageMetadata
+import com.github.navikt.tbd_libs.rapids_and_rivers_api.MessageProblems
 import com.github.navikt.tbd_libs.rapids_and_rivers_api.RapidsConnection
 import io.micrometer.core.instrument.MeterRegistry
 import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.Medlemskapsbehov.aarsaker
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.Medlemskapsbehov.løsning
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.Medlemskapsbehov.medlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.Medlemskapsbehov.medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.sykepenger.libs.logging.MdcKey
+import no.nav.sykepenger.libs.logging.loggError
 import no.nav.sykepenger.libs.logging.loggInfo
 import no.nav.sykepenger.libs.logging.medMdc
 
@@ -63,8 +66,17 @@ internal class GrunnlagForNyMedlemskapsvurderingRiver(
                     skjæringstidspunkt = skjæringstidspunkt,
                     medlemskapsprøvingId = medlemskapsprøvingId,
                     saksbehandlerIdent = saksbehandlerIdent,
+                    aarsaker = packet.aarsaker(),
                 )
             }
         }
+    }
+
+    override fun onError(
+        problems: MessageProblems,
+        context: MessageContext,
+        metadata: MessageMetadata,
+    ) {
+        loggError("Ugyldig løsning på behov for ${Medlemskapsbehov.NAVN} til ny medlemskapsvurdering", "feil" to problems.toString())
     }
 }

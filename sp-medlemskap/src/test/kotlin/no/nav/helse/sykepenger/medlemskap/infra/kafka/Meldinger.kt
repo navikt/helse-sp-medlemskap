@@ -53,17 +53,20 @@ internal fun medlemskapsvurderingResultatBehov(
     }
     """
 
-/** Løser et `Medlemskap`-behov slik sparkel-medlemskap og behovsakkumulatoren gjør det. */
+/** Løser et `Medlemskap`-behov slik sparkel-medlemskap og behovsakkumulatoren gjør det. [aarsaker] er rå JSON. */
 internal fun løsMedlemskapsbehov(
     behov: JsonNode,
     svar: String,
+    @Language("JSON") aarsaker: String? = null,
 ): String {
     val løst = behov.deepCopy() as ObjectNode
-    løst
-        .putObject("@løsning")
-        .putObject("Medlemskap")
-        .putObject("resultat")
-        .put("svar", svar)
+    val resultat =
+        løst
+            .putObject("@løsning")
+            .putObject("Medlemskap")
+            .putObject("resultat")
+            .put("svar", svar)
+    if (aarsaker != null) resultat.set("aarsaker", objectMapper.readTree(aarsaker))
     løst.put("@final", true)
     return objectMapper.writeValueAsString(løst)
 }

@@ -18,7 +18,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 /** Sett til `true` for å pretty printe alle Kafka-meldinger (inn og ut) i testene til konsollen. */
-private const val PRETTY_PRINT_KAFKA_MELDINGER = false
+private const val PRETTY_PRINT_KAFKA_MELDINGER = true
 
 internal class MedlemskapE2ETest : DatabaseTest() {
     private val apper = mutableListOf<E2ETestapp>()

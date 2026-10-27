@@ -9,6 +9,7 @@ import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import no.nav.helse.til
 import no.nav.sykepenger.libs.logging.MdcKey
 import no.nav.sykepenger.libs.logging.loggError
@@ -66,6 +67,7 @@ internal class MedlemskapService(
         fødselsnummer: String,
         skjæringstidspunkt: LocalDate,
         medlemskapsprøvingId: MedlemskapsprøvingId,
+        aarsaker: List<Årsak>? = null,
     ): BehandleGrunnlagResultat =
         medMdc(
             MdcKey.IDENTITETSNUMMER to fødselsnummer,
@@ -77,7 +79,7 @@ internal class MedlemskapService(
             avvisGrunnlag(prøving, medlemskapsprøvingId, skjæringstidspunkt)?.let { return@medMdc it }
             checkNotNull(prøving)
 
-            val vurdering = prøving.motta(svar, versjonAvKode)
+            val vurdering = prøving.motta(svar, versjonAvKode, aarsaker)
             medlemskapsvurderingRepository.lagre(vurdering)
             medlemskapsprøvingRepository.lagre(prøving)
             loggInfo(
@@ -148,6 +150,7 @@ internal class MedlemskapService(
         skjæringstidspunkt: LocalDate,
         medlemskapsprøvingId: MedlemskapsprøvingId,
         saksbehandlerIdent: String,
+        aarsaker: List<Årsak>? = null,
     ): BehandleGrunnlagResultat =
         medMdc(
             MdcKey.IDENTITETSNUMMER to fødselsnummer,
@@ -159,7 +162,7 @@ internal class MedlemskapService(
             avvisGrunnlag(prøving, medlemskapsprøvingId, skjæringstidspunkt)?.let { return@medMdc it }
             checkNotNull(prøving)
 
-            val vurdering = prøving.motta(svar, versjonAvKode)
+            val vurdering = prøving.motta(svar, versjonAvKode, aarsaker)
             medlemskapsprøvingRepository.lagre(prøving)
             lagreOgMeldNyVurdering(vurdering, saksbehandlerIdent)
             loggInfo(

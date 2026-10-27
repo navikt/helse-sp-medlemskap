@@ -9,6 +9,7 @@ import no.nav.helse.sykepenger.medlemskap.application.OutboxMelding
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
+import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -18,6 +19,7 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 internal class GrunnlagForMedlemskapsvurderingRiverTest {
@@ -63,6 +65,29 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         val kilde = assertIs<Vurderingskilde.Automatisk>(vurdering.kilde)
         assertEquals(1.februar til 28.februar, kilde.oppslagsperiode)
         assertEquals("versjon", kilde.versjonAvKildekode)
+        assertNull(kilde.aarsaker)
+    }
+
+    @Test
+    fun `årsaker fra sparkel-medlemskap lagres i kilden`() {
+        rapid.sendTestMessage(medlemskapsvurderingBehov(1.februar, 1.februar, 28.februar))
+
+        rapid.sendTestMessage(
+            løsMedlemskapsbehov(rapid.inspektør.message(0), "UAVKLART", """[{"regelId": "REGEL_3", "forklaringPaaUavklart": "Forklaring"}]"""),
+        )
+
+        val kilde = assertIs<Vurderingskilde.Automatisk>(transaksjon.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar)!!.kilde)
+        assertEquals(listOf(Årsak("REGEL_3", "Forklaring")), kilde.aarsaker)
+    }
+
+    @Test
+    fun `løsning med ugyldige årsaker gir ingen vurdering`() {
+        rapid.sendTestMessage(medlemskapsvurderingBehov(1.februar, 1.februar, 28.februar))
+
+        rapid.sendTestMessage(løsMedlemskapsbehov(rapid.inspektør.message(0), "UAVKLART", """[{"regelId": "REGEL_3"}]"""))
+
+        assertEquals(1, rapid.inspektør.size)
+        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
     }
 
     @Test
@@ -129,11 +154,18 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
                 ekstra = mapOf("saksbehandlerIdent" to "A123456"),
             )
 
-        rapid.sendTestMessage(løsMedlemskapsbehov(jacksonObjectMapper().readTree(behov.toJson()), "JA"))
+        rapid.sendTestMessage(
+            løsMedlemskapsbehov(
+                jacksonObjectMapper().readTree(behov.toJson()),
+                "JA",
+                """[{"regelId": "REGEL_1", "forklaringPaaUavklart": "Forklaring"}]""",
+            ),
+        )
 
         assertEquals(2, rapid.inspektør.size, "Ny vurdering meldes via outbox, ikke direkte på rapid")
         val gjeldende = transaksjon.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar)!!
         assertEquals(Medlemskapsstatus.Ja, gjeldende.status)
+        assertEquals(listOf(Årsak("REGEL_1", "Forklaring")), assertIs<Vurderingskilde.Automatisk>(gjeldende.kilde).aarsaker)
         val handling =
             transaksjon.outbox.upubliserteMeldinger
                 .map { it.melding }

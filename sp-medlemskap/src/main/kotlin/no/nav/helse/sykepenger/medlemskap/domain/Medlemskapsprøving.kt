@@ -46,12 +46,13 @@ internal class Medlemskapsprøving private constructor(
     fun motta(
         svar: Medlemskapsstatus,
         versjonAvKode: String = "test",
+        aarsaker: List<Årsak>? = null,
     ): Medlemskapsvurdering {
         val venter =
             tilstand as? Tilstand.VenterPåGrunnlag
                 ?: error("Prøving $id venter ikke på grunnlag, men er i tilstand $tilstand")
         check(venter.behov == Grunnlagsbehov.Medlemskap) { "Prøving $id venter på ${venter.behov}, ikke medlemskap" }
-        val vurdering = Medlemskapsvurdering.automatisk(this, svar, versjonAvKode)
+        val vurdering = Medlemskapsvurdering.automatisk(this, svar, versjonAvKode, aarsaker)
         tilstand = Tilstand.Fullført(vurdering.id)
         return vurdering
     }
