@@ -45,6 +45,7 @@ internal const val FØDSELSNUMMER = "12029240045"
 /** Rivere, outbox og REST-API koblet sammen mot en ekte database, slik som i appen. */
 internal class E2ETestapp(
     spleisvurderinger: List<SpleisMedlemskapsvurdering> = emptyList(),
+    private val prettyPrintMeldinger: Boolean = false,
 ) {
     private val transaksjon = Database.transaksjonProvider
     private val spleisClient =
@@ -54,6 +55,14 @@ internal class E2ETestapp(
 
     val rapid =
         TestRapid().apply {
+            if (prettyPrintMeldinger) {
+                val rapid = this
+                // Registreres før rivene, så utgående meldinger fra forrige melding skrives ut før neste innkommende
+                register { melding, _, metadata, _ ->
+                    skrivUtNyeUtgåendeMeldinger(rapid)
+                    skrivUt("INN", metadata.key, objectMapper.readTree(melding).toPrettyString())
+                }
+            }
             MedlemskapsvurderingRiver(this, transaksjon)
             GrunnlagForAutomatiskMedlemskapsvurderingRiver(this, transaksjon)
             GrunnlagForNyMedlemskapsvurderingRiver(this, transaksjon)
@@ -61,6 +70,30 @@ internal class E2ETestapp(
         }
 
     val outboxJobb = OutboxPubliseringsjobb(rapid, transaksjon, LeaderElection { true })
+
+    private var antallUtskrevneUtgående = 0
+
+    /** Skriver ut utgående meldinger som ikke er skrevet ut ennå. Gjør ingenting med mindre `prettyPrintMeldinger` er på. */
+    fun skrivUtNyeUtgåendeMeldinger() {
+        if (prettyPrintMeldinger) skrivUtNyeUtgåendeMeldinger(rapid)
+    }
+
+    private fun skrivUtNyeUtgåendeMeldinger(rapid: TestRapid) {
+        val inspektør = rapid.inspektør
+        while (antallUtskrevneUtgående < inspektør.size) {
+            val indeks = antallUtskrevneUtgående++
+            skrivUt("UT", inspektør.key(indeks), inspektør.message(indeks).toPrettyString())
+        }
+    }
+
+    private fun skrivUt(
+        retning: String,
+        key: String?,
+        melding: String,
+    ) {
+        println("──────── $retning (key=$key) ────────")
+        println(melding)
+    }
 
     val meldinger get() = (0 until rapid.inspektør.size).map { rapid.inspektør.message(it) }
 

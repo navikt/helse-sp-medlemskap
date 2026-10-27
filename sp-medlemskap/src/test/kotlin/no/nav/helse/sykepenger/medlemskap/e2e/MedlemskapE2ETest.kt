@@ -7,6 +7,7 @@ import no.nav.helse.sykepenger.medlemskap.e2e.E2ETestapp.Companion.medlemskapsvu
 import no.nav.helse.sykepenger.medlemskap.infra.db.Database
 import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -16,7 +17,19 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
+/** Sett til `true` for å pretty printe alle Kafka-meldinger (inn og ut) i testene til konsollen. */
+private const val PRETTY_PRINT_KAFKA_MELDINGER = false
+
 internal class MedlemskapE2ETest : DatabaseTest() {
+    private val apper = mutableListOf<E2ETestapp>()
+
+    private fun app(spleisvurderinger: List<SpleisMedlemskapsvurdering> = emptyList()) = E2ETestapp(spleisvurderinger, PRETTY_PRINT_KAFKA_MELDINGER).also { apper += it }
+
+    @AfterEach
+    fun skrivUtGjenværendeMeldinger() {
+        apper.forEach { it.skrivUtNyeUtgåendeMeldinger() }
+    }
+
     @ParameterizedTest
     @CsvSource(
         "JA, true",
@@ -28,7 +41,7 @@ internal class MedlemskapE2ETest : DatabaseTest() {
         svar: String,
         forventetOk: Boolean,
     ) {
-        val app = E2ETestapp()
+        val app = app()
 
         val vurderingId = app.vurderAutomatisk(svar)
 
@@ -41,7 +54,7 @@ internal class MedlemskapE2ETest : DatabaseTest() {
 
     @Test
     fun `behovet om medlemskap har det sparkel-medlemskap trenger`() {
-        val app = E2ETestapp()
+        val app = app()
 
         app.rapid.sendTestMessage(medlemskapsvurderingBehov(UUID.randomUUID()), FØDSELSNUMMER)
 
@@ -56,7 +69,7 @@ internal class MedlemskapE2ETest : DatabaseTest() {
 
     @Test
     fun `nytt behov for samme skjæringstidspunkt gjenbruker vurderingen`() {
-        val app = E2ETestapp()
+        val app = app()
         val første = app.vurderAutomatisk("JA")
 
         val behovId = UUID.randomUUID()
@@ -77,7 +90,7 @@ internal class MedlemskapE2ETest : DatabaseTest() {
 
     @Test
     fun `nytt skjæringstidspunkt gir ny vurdering`() {
-        val app = E2ETestapp()
+        val app = app()
 
         val første = app.vurderAutomatisk("JA", skjæringstidspunkt = "2018-02-01")
         val andre = app.vurderAutomatisk("NEI", skjæringstidspunkt = "2018-02-15")
@@ -89,7 +102,7 @@ internal class MedlemskapE2ETest : DatabaseTest() {
 
     @Test
     fun `duplisert løsning fra sparkel gir bare én vurdering og ett svar`() {
-        val app = E2ETestapp()
+        val app = app()
         app.rapid.sendTestMessage(medlemskapsvurderingBehov(UUID.randomUUID()), FØDSELSNUMMER)
         val løst = løsMedlemskapsbehov(app.meldinger.single(), "JA")
 
@@ -104,7 +117,7 @@ internal class MedlemskapE2ETest : DatabaseTest() {
     fun `resultat for vurdering gjort i Spleis hentes derfra`() {
         val id = MedlemskapsvurderingId.ny()
         val app =
-            E2ETestapp(
+            app(
                 listOf(SpleisMedlemskapsvurdering.Spleis(id, LocalDate.of(2018, 1, 1), Instant.now(), Medlemskapsstatus.UavklartMedBrukerspørsmål)),
             )
 
