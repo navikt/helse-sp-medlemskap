@@ -522,7 +522,7 @@ Status for hvert steg:
 | 1. Bygg den nye appen | Stort sett gjort |
 | 2. Id på alle vilkårsgrunnlag | Gjort ([`e19958c`](https://github.com/navikt/helse-spleis/commit/e19958c02c)) |
 | 3. Eksponer id-en og den gamle vurderingen | Endepunktet er laget. Spanner og Speil gjenstår |
-| 4. Kanal for endrede vurderinger | Ikke startet. Kan vente til sp-medlemskap skal publisere nye vurderinger |
+| 4. Kanal for endrede vurderinger | Laget i Spleis. Bytter bare id-en, ikke `medlemskapstatus` |
 | 5. Reserveløsningen i den nye appen | Laget i sp-medlemskap. Ikke i prod |
 | 6. Spleis spør den nye appen om resultatet | Laget bak toggle, på i dev |
 | 7. Den nye appen gjør vurderingen | Laget i Spleis bak toggle, på i dev. Sender både `Medlemskap` og `Medlemskapsvurdering` |
@@ -554,7 +554,7 @@ For medlemskap kan ikke dette skje i dag:
 
 - `kopierMed` har ikke noe parameter for medlemskap. Den kopierer alltid både `medlemskapstatus` og `medlemskapsvurderingId` fra det gamle grunnlaget.
 - Medlemskapet endres bare når medlemskapstjenesten svarer på nytt. Svaret kommer i `VilkårsgrunnlagMessage`, og `Vilkårsgrunnlag.valider()` lager da et nytt grunnlag med ny tilfeldig id. Status og id byttes alltid samtidig.
-- `EndretVurderingPåSkjæringstidspunkt` støtter bare `Forsikringsvurdering` og `Opptjeningsvurdering`, ikke medlemskap.
+- `EndretVurderingPåSkjæringstidspunkt` bytter bare `medlemskapsvurderingId`, ikke `medlemskapstatus`. Se [steg 4](#4-kanal-for-endrede-vurderinger).
 
 Overstyring av arbeidsforhold spør ikke medlemskapstjenesten på nytt, så statusen er den samme. Da er det riktig å beholde id-en, fordi den peker på vurderingen som faktisk brukes. Testene i `MedlemskapsvurderingIdTest` låser begge tilfellene:
 
@@ -578,6 +578,10 @@ Endepunktet og tilgangen er laget i `sykepenger-api/.../spleis/medlemskap/Medlem
 - Legg `Medlemskapsvurdering` til i `EndretVurderingPåSkjæringstidspunktMessage.Vurderingsformat` og `Vurdering`.
 - Lag `medEndretMedlemskapsvurdering` i `Grunnlagsdata`. Gjør som `medEndretOpptjeningsvurdering`: kopier med id-en fra sp-medlemskap, og gjør ingenting hvis id-en allerede er lagt til grunn.
 - Dette er første gang `kopierMed` kan få nytt medlemskap. Send ny status og ny id inn sammen, helst som ett parameter, så det er umulig å endre statusen uten å bytte id-en. Ellers kan du gjenta feilen bak V345 og V346.
+
+Steget er laget i Spleis. `EndretVurderingPåSkjæringstidspunktRiver` lytter på `endret_medlemskapsvurdering`, og `medEndretMedlemskapsvurdering` lager et nytt grunnlag med id-en fra sp-medlemskap og starter revurdering med årsaken `ENDRET_MEDLEMSKAPSVURDERING`. Testene ligger i `EndretVurderingPåSkjæringstidspunktTest` og `MessageMediatorTest`.
+
+Eventet har ikke med status, så Spleis bytter bare id-en. `medlemskapstatus` på grunnlaget beholdes. Det er greit fordi beregningen bruker svaret fra `MedlemskapsvurderingResultat` for den nye id-en (steg 6). Med togglen `MEDLEMSKAPSVURDERINGRESULTATBEHOV` av gir revurderingen samme resultat som før, og Speil viser fortsatt statusen på grunnlaget.
 
 Dette må være på plass i prod før sp-medlemskap begynner å lage nye vurderinger og publisere `endret_medlemskapsvurdering` i prod. Det trenger ikke være på plass før steg 6. Se [Når kan kanalen utsettes](#når-kan-kanalen-for-endrede-vurderinger-utsettes).
 
