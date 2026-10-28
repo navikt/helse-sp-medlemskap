@@ -7,6 +7,9 @@ import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
@@ -25,7 +28,8 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonP
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.installTestPlugins
 import java.util.UUID
 
-private const val PORT = 8181
+// Porten Speil forventer for sp-medlemskap (lokalPort i speil/src/app/api/backends.ts)
+private const val PORT = 8383
 
 fun main() {
     val transaksjonProvider = InMemoryTransaksjonProvider()
@@ -35,6 +39,7 @@ fun main() {
                 openApiConfig = OpenApiConfig(eksponerOpenApi = true, tittel = "sp-medlemskap"),
             )
             installerLokalAutentisering()
+            installerLokaltTokenEndepunkt()
             configureRestRuting(
                 restAdapter =
                     RestAdapter<Transaksjonskontekst>(
@@ -74,7 +79,7 @@ private fun Application.installerLokalAutentisering() {
                     navn = "Lokal Saksbehandler",
                 ),
             tilganger = Tilgang.entries.toSet(),
-            accessToken = AccessToken("lokalt-token"),
+            accessToken = AccessToken(LOKALT_TOKEN),
         )
 
     install(Authentication) {
@@ -83,6 +88,18 @@ private fun Application.installerLokalAutentisering() {
         }
     }
 }
+
+/**
+ * Speil henter et token fra `/local-token` når backenden kjører lokalt. Den lokale autentiseringen
+ * slipper alle inn, så tokenet trenger ikke å være gyldig.
+ */
+private fun Application.installerLokaltTokenEndepunkt() {
+    routing {
+        get("/local-token") { call.respondText(LOKALT_TOKEN) }
+    }
+}
+
+private const val LOKALT_TOKEN = "lokalt-token"
 
 private class TomSpleisClient : ISpleisClient {
     override fun hentMedlemskapsvurderinger(fødselsnummer: String): List<SpleisMedlemskapsvurdering> = emptyList()
