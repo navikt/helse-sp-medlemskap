@@ -1,5 +1,5 @@
 [versions]
-flyway = "13.10.3"
+flyway = "13.11.1"
 kotlinx-coroutines = "1.11.0"
 # Må følge Kotlin-versjonen som no.nav.sykepenger.kotlin-pluginen bruker
 kotlin = "2.4.21"
@@ -11,7 +11,7 @@ smiley4-ktor-openapi-tools = "5.7.0"
 smiley4-schema-kenerator = "2.7.2"
 tbd-libs = "20261013.1613"
 rapidsAndRivers = "2026091610031789545782"
-sykepengerGradlePlugins = "20261026.1611"
+sykepengerGradlePlugins = "20261028.1441"
 testcontainers = "2.0.5"
 
 [libraries]
