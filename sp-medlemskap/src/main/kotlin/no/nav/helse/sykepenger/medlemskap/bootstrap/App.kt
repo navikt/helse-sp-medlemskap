@@ -46,6 +46,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.configureRestRuting
 import no.nav.sykepenger.libs.logging.loggInfo
 import java.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 private const val APP_NAVN = "sp-medlemskap"
 
@@ -92,8 +93,9 @@ fun main() {
     lateinit var rapidsConnection: RapidsConnection
     val leaderElection =
         NaisLeaderElection(
-            electorGetUrl = env.getValue("ELECTOR_GET_URL"),
+            electorSseUrl = env.getValue("ELECTOR_SSE_URL"),
             hostname = env.getValue("HOSTNAME"),
+            ventetidFørNyTilkobling = 5.seconds,
         )
     val ventPåForhåndsvurdering =
         konfigurasjon.forhåndsvurderingVentetid?.let { ventetid ->
@@ -115,6 +117,7 @@ fun main() {
         })
         .apply {
             rapidsConnection = this
+            register(leaderElection)
             GrunnlagForAutomatiskMedlemskapsvurderingRiver(
                 rapidsConnection = this,
                 transaksjonProvider = transaksjonProvider,

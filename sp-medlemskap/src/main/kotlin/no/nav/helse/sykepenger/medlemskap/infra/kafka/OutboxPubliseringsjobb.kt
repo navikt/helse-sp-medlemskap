@@ -60,6 +60,7 @@ internal class OutboxPubliseringsjobb(
                                 is OutboxMelding.MedlemskapsvurderingEndret -> melding.tilJsonMessage(konvolutt.identitetsnummer)
                                 is OutboxMelding.Saksbehandlerhandling -> melding.tilJsonMessage(konvolutt.identitetsnummer)
                             }
+                        loggInfo("Sender melding fra outbox", "melding" to json.toJson())
                         val (_, feiledeMeldinger) =
                             rapidsConnection.publish(
                                 listOf(OutgoingMessage(body = json.toJson(), key = konvolutt.identitetsnummer.value)),
