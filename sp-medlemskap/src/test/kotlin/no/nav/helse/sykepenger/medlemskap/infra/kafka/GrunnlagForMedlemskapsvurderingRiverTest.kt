@@ -3,13 +3,15 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.februar
 import no.nav.helse.sykepenger.medlemskap.application.HandlingType
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService
 import no.nav.helse.sykepenger.medlemskap.application.OutboxMelding
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -22,8 +24,8 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-internal class GrunnlagForMedlemskapsvurderingRiverTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class GrunnlagForMedlemskapsvurderingRiverTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
     private val rapid =
         TestRapid().apply {
             MedlemskapsvurderingRiver(this, transaksjon, "versjon")
@@ -60,7 +62,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
                         .asString(),
                 ),
             )
-        val vurdering = transaksjon.medlemskapsvurderinger.finn(id)!!
+        val vurdering = transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.finn(id) }!!
         assertEquals(forventetStatus, vurdering.status)
         val kilde = assertIs<Vurderingskilde.Automatisk>(vurdering.kilde)
         assertEquals(1.februar til 28.februar, kilde.oppslagsperiode)
@@ -76,7 +78,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
             løsMedlemskapsbehov(rapid.inspektør.message(0), "UAVKLART", """[{"regelId": "REGEL_3", "forklaringPaaUavklart": "Forklaring"}]"""),
         )
 
-        val kilde = assertIs<Vurderingskilde.Automatisk>(transaksjon.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar)!!.kilde)
+        val kilde = assertIs<Vurderingskilde.Automatisk>(transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar) }!!.kilde)
         assertEquals(listOf(Årsak("REGEL_3", "Forklaring")), kilde.aarsaker)
     }
 
@@ -87,7 +89,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         rapid.sendTestMessage(løsMedlemskapsbehov(rapid.inspektør.message(0), "UAVKLART", """[{"regelId": "REGEL_3"}]"""))
 
         assertEquals(1, rapid.inspektør.size)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
@@ -99,7 +101,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         rapid.sendTestMessage(løst)
 
         assertEquals(2, rapid.inspektør.size)
-        assertEquals(1, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(1, Lagret.antallVurderinger())
     }
 
     @Test
@@ -111,7 +113,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         rapid.sendTestMessage(løst.toString())
 
         assertEquals(1, rapid.inspektør.size)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
@@ -123,7 +125,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         rapid.sendTestMessage(løst.toString())
 
         assertEquals(1, rapid.inspektør.size)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
@@ -133,7 +135,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         rapid.sendTestMessage(løsMedlemskapsbehov(rapid.inspektør.message(0), "KANSKJE"))
 
         assertEquals(1, rapid.inspektør.size)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
@@ -142,7 +144,7 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         rapid.sendTestMessage(løsMedlemskapsbehov(rapid.inspektør.message(0), "NEI"))
         val venter =
             assertIs<MedlemskapService.VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(
-                MedlemskapService(transaksjon).vurderMedlemskapPåNytt(FØDSELSNUMMER, 1.februar),
+                transaksjon.transaksjon { MedlemskapService(it).vurderMedlemskapPåNytt(FØDSELSNUMMER, 1.februar) },
             )
         val behov =
             Medlemskapsbehov.nytt(
@@ -163,18 +165,19 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest {
         )
 
         assertEquals(2, rapid.inspektør.size, "Ny vurdering meldes via outbox, ikke direkte på rapid")
-        val gjeldende = transaksjon.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar)!!
+        val gjeldende = transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar) }!!
         assertEquals(Medlemskapsstatus.Ja, gjeldende.status)
         assertEquals(listOf(Årsak("REGEL_1", "Forklaring")), assertIs<Vurderingskilde.Automatisk>(gjeldende.kilde).aarsaker)
         val handling =
-            transaksjon.outbox.upubliserteMeldinger
+            Lagret
+                .upubliserteMeldinger()
                 .map { it.melding }
                 .filterIsInstance<OutboxMelding.Saksbehandlerhandling>()
                 .single()
         assertEquals(HandlingType.NY_AUTOMATISK_MEDLEMSKAPSVURDERING, handling.handlingType)
         assertEquals("A123456", handling.saksbehandlerIdent)
         assertTrue(
-            transaksjon.outbox.upubliserteMeldinger.any {
+            Lagret.upubliserteMeldinger().any {
                 it.melding == OutboxMelding.MedlemskapsvurderingEndret(1.februar, gjeldende.id.value, manuellVurdering = false)
             },
         )

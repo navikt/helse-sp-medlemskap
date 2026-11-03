@@ -10,8 +10,8 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
+import no.nav.helse.sykepenger.medlemskap.infra.db.PostgresTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.AZURE_AD_AUTHENTICATION_NAME
@@ -25,14 +25,20 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.openapi.OpenApiConfig
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.configureRestRuting
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
+import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.TestDatabase
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.installTestPlugins
 import java.util.UUID
 
 // Porten Speil forventer for sp-medlemskap (lokalPort i speil/src/app/api/backends.ts)
 private const val PORT = 8383
 
+/**
+ * Kjører appen lokalt mot en Postgres i Testcontainers, så Docker (eller Colima) må kjøre. Databasen
+ * forsvinner når appen stopper.
+ */
 fun main() {
-    val transaksjonProvider = InMemoryTransaksjonProvider()
+    val database = TestDatabase.start(postgresImage = "postgres:18").also { it.migrer() }
+    val transaksjonProvider = PostgresTransaksjonProvider(database.dataSource)
     val server =
         embeddedServer(CIO, port = PORT) {
             installTestPlugins(
@@ -59,6 +65,7 @@ fun main() {
 
     server.start(wait = false)
     println("LocalApp startet.")
+    println("Database: ${database.jdbcUrl} (brukernavn og passord: ${database.brukernavn}/${database.passord})")
     println("OpenAPI: http://localhost:$PORT/api/openapi.json")
     println("Swagger UI: http://localhost:$PORT/api/swagger")
     Thread.currentThread().join()

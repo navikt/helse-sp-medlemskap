@@ -15,12 +15,13 @@ import io.ktor.server.auth.authentication
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisClientException
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
@@ -33,6 +34,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.Tilgang
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureContentNegotiation
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureResources
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
+import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.get
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -43,7 +45,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-class GetMedlemskapshistorikkBehandlerTest {
+internal class GetMedlemskapshistorikkBehandlerTest : DatabaseTest() {
     private val saksbehandler = Saksbehandler(NavIdent("Z999999"), SaksbehandlerOid("oid"), "Test Testesen")
     private val identitetsnummer = Identitetsnummer("12345678901")
     private val skjæringstidspunkt = LocalDate.of(2024, 2, 1)
@@ -82,7 +84,7 @@ class GetMedlemskapshistorikkBehandlerTest {
 
     private fun Application.settOppTestapp(
         tilganger: Set<Tilgang> = setOf(Tilgang.Les),
-        transaksjonProvider: InMemoryTransaksjonProvider = InMemoryTransaksjonProvider(),
+        transaksjonProvider: TransaksjonProvider<Transaksjonskontekst> = Database.transaksjonProvider,
         tilgangskontroll: PopulasjonstilgangskontrollProvider = FakeTilgangskontroll(),
         spleisClient: ISpleisClient = FakeSpleisClient(),
     ) {
@@ -151,12 +153,12 @@ class GetMedlemskapshistorikkBehandlerTest {
     @Test
     fun `historikken har personens vurderinger på skjæringstidspunktet, nyeste først`() =
         testApplication {
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val automatisk = spleisvurdering(Medlemskapsstatus.Nei, Instant.parse("2025-04-01T10:03:00Z"))
             val manuell = saksbehandlervurdering(Medlemskapsstatus.Ja, Instant.parse("2025-07-25T12:21:00Z"))
             val annetSkjæringstidspunkt = saksbehandlervurdering(Medlemskapsstatus.Ja, Instant.now(), skjæringstidspunkt = LocalDate.of(2024, 3, 1))
             val annenPerson = saksbehandlervurdering(Medlemskapsstatus.Ja, Instant.now(), fødselsnummer = "98765432109")
-            listOf(automatisk, manuell, annetSkjæringstidspunkt, annenPerson).forEach(transaksjonProvider.medlemskapsvurderinger::lagre)
+            listOf(automatisk, manuell, annetSkjæringstidspunkt, annenPerson).forEach { verdi -> transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(verdi) } }
 
             application { settOppTestapp(transaksjonProvider = transaksjonProvider) }
 
@@ -193,8 +195,8 @@ class GetMedlemskapshistorikkBehandlerTest {
     @Test
     fun `spleis-api svikter gir 503 selv om noe finnes i db, siden historikken da kan være ufullstendig`() =
         testApplication {
-            val transaksjonProvider = InMemoryTransaksjonProvider()
-            transaksjonProvider.medlemskapsvurderinger.lagre(saksbehandlervurdering(Medlemskapsstatus.Ja, Instant.now()))
+            val transaksjonProvider = Database.transaksjonProvider
+            transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(saksbehandlervurdering(Medlemskapsstatus.Ja, Instant.now())) }
 
             application {
                 settOppTestapp(

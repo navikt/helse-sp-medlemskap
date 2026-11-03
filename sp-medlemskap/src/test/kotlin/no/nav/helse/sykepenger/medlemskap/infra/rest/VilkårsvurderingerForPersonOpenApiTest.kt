@@ -8,9 +8,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.rammeverk.openapi.OpenApiConfig
@@ -25,9 +26,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import tools.jackson.module.kotlin.jacksonObjectMapper
 
-class VilkårsvurderingerForPersonOpenApiTest {
+internal class VilkårsvurderingerForPersonOpenApiTest : DatabaseTest() {
     private fun Application.settOppTestapp() {
-        val transaksjonProvider = InMemoryTransaksjonProvider()
+        val transaksjonProvider = Database.transaksjonProvider
         configureContentNegotiation()
         configureResources()
         val restAdapter =

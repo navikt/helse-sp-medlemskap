@@ -4,6 +4,9 @@ import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.tilMedlemskapsvurdering
@@ -14,8 +17,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-internal class PersonAvstemmingServiceTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class PersonAvstemmingServiceTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
     private var spleisSvar = emptyList<SpleisMedlemskapsvurdering>()
     private var spleisFeil: RuntimeException? = null
     private var antallSpleisKall = 0
@@ -39,20 +42,21 @@ internal class PersonAvstemmingServiceTest {
         val antallLagret = service.lagreMedlemskapsvurderinger(FØDSELSNUMMER)
 
         assertEquals(2, antallLagret)
-        assertEquals(2, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(2, Lagret.antallVurderinger())
         assertEquals(
             setOf(FØDSELSNUMMER),
-            transaksjon.medlemskapsvurderinger.alleVurderinger
+            Lagret
+                .vurderinger()
                 .map { it.fødselsnummer }
                 .toSet(),
         )
         assertEquals(
-            InMemoryMigreringsloggRepository.Nedlasting(
+            Lagret.Nedlasting(
                 fødselsnummer = FØDSELSNUMMER,
                 antallVurderinger = 2,
                 antallHoppetOver = 0,
             ),
-            transaksjon.migreringslogg.alleNedlastinger.single(),
+            Lagret.nedlastinger().single(),
         )
     }
 
@@ -69,11 +73,11 @@ internal class PersonAvstemmingServiceTest {
 
         assertEquals(2, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
 
-        val spleis = transaksjon.medlemskapsvurderinger.finn(fraSpleis.medlemskapsvurderingId)!!
+        val spleis = transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.finn(fraSpleis.medlemskapsvurderingId) }!!
         assertEquals(Medlemskapsstatus.Nei, spleis.status)
         assertEquals(Vurderingskilde.OverførtFraSpleis, spleis.kilde)
         assertEquals(fraSpleis.opprettet, spleis.vurdertTidspunkt)
-        val infotrygd = transaksjon.medlemskapsvurderinger.finn(fraInfotrygd.medlemskapsvurderingId)!!
+        val infotrygd = transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.finn(fraInfotrygd.medlemskapsvurderingId) }!!
         assertEquals(Medlemskapsstatus.Ja, infotrygd.status)
         assertEquals(Vurderingskilde.OverførtFraInfotrygd, infotrygd.kilde)
     }
@@ -88,38 +92,40 @@ internal class PersonAvstemmingServiceTest {
 
         assertEquals(0, antallNyeLagret)
         assertEquals(1, antallSpleisKall)
-        assertEquals(1, transaksjon.medlemskapsvurderinger.antallLagringer)
-        assertEquals(1, transaksjon.migreringslogg.alleNedlastinger.size)
+        assertEquals(1, Lagret.antallVurderinger())
+        assertEquals(1, Lagret.nedlastinger().size)
     }
 
     @Test
     fun `teller vurderinger som var lagret før migreringen`() {
         val tidligereVurdering = vurdering()
-        transaksjon.medlemskapsvurderinger.lagre(tidligereVurdering.tilMedlemskapsvurdering(FØDSELSNUMMER))
+        transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(tidligereVurdering.tilMedlemskapsvurdering(FØDSELSNUMMER)) }
         spleisSvar = listOf(tidligereVurdering, vurdering())
 
         assertEquals(1, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
         assertEquals(
-            InMemoryMigreringsloggRepository.Nedlasting(
+            Lagret.Nedlasting(
                 fødselsnummer = FØDSELSNUMMER,
                 antallVurderinger = 2,
                 antallHoppetOver = 1,
             ),
-            transaksjon.migreringslogg.alleNedlastinger.single(),
+            Lagret.nedlastinger().single(),
         )
     }
 
     @Test
     fun `feiler hvis vurderings-ID allerede tilhører en annen person`() {
         val spleisVurdering = vurdering()
-        transaksjon.medlemskapsvurderinger.lagre(
-            Medlemskapsvurdering.overførtFraInfotrygd(
-                id = spleisVurdering.medlemskapsvurderingId,
-                fødselsnummer = ET_ANNET_FØDSELSNUMMER,
-                skjæringstidspunkt = spleisVurdering.skjæringstidspunkt,
-                vurdertTidspunkt = spleisVurdering.opprettet,
-            ),
-        )
+        transaksjon.transaksjon { tx ->
+            tx.medlemskapsvurderinger.lagre(
+                Medlemskapsvurdering.overførtFraInfotrygd(
+                    id = spleisVurdering.medlemskapsvurderingId,
+                    fødselsnummer = ET_ANNET_FØDSELSNUMMER,
+                    skjæringstidspunkt = spleisVurdering.skjæringstidspunkt,
+                    vurdertTidspunkt = spleisVurdering.opprettet,
+                ),
+            )
+        }
         spleisSvar = listOf(spleisVurdering)
 
         val feil =
@@ -133,7 +139,8 @@ internal class PersonAvstemmingServiceTest {
         )
         assertEquals(
             ET_ANNET_FØDSELSNUMMER,
-            transaksjon.medlemskapsvurderinger.alleVurderinger
+            Lagret
+                .vurderinger()
                 .single()
                 .fødselsnummer,
         )
@@ -142,14 +149,14 @@ internal class PersonAvstemmingServiceTest {
     @Test
     fun `registrerer også tomt svar slik at spleis ikke kalles igjen`() {
         assertEquals(0, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
         assertEquals(
-            InMemoryMigreringsloggRepository.Nedlasting(FØDSELSNUMMER, 0, 0),
-            transaksjon.migreringslogg.alleNedlastinger.single(),
+            Lagret.Nedlasting(FØDSELSNUMMER, 0, 0),
+            Lagret.nedlastinger().single(),
         )
         assertEquals(0, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
         assertEquals(1, antallSpleisKall)
-        assertEquals(1, transaksjon.migreringslogg.alleNedlastinger.size)
+        assertEquals(1, Lagret.nedlastinger().size)
     }
 
     @Test
@@ -163,8 +170,8 @@ internal class PersonAvstemmingServiceTest {
             }
 
         assertEquals(forventetFeil, feil)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
-        assertEquals(0, transaksjon.migreringslogg.alleNedlastinger.size)
+        assertEquals(0, Lagret.antallVurderinger())
+        assertEquals(0, Lagret.nedlastinger().size)
     }
 
     private fun vurdering(status: Medlemskapsstatus = Medlemskapsstatus.Ja) =

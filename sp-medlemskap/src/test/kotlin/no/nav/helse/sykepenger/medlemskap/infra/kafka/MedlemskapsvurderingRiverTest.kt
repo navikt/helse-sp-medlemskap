@@ -3,11 +3,13 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.februar
 import no.nav.helse.januar
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.domain.Grunnlagsbehov
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -16,8 +18,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-internal class MedlemskapsvurderingRiverTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class MedlemskapsvurderingRiverTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
     private val rapid =
         TestRapid().apply {
             MedlemskapsvurderingRiver(this, transaksjon)
@@ -31,7 +33,7 @@ internal class MedlemskapsvurderingRiverTest {
         assertEquals(1, rapid.inspektør.size)
         assertEquals("123", rapid.inspektør.key(0))
         val behov = rapid.inspektør.message(0)
-        val prøving = transaksjon.medlemskapsprøvinger.allePrøvinger.single()
+        val prøving = Lagret.prøvinger().single()
         assertEquals(listOf("Medlemskap"), behov.path("@behov").toList().map { it.asString() })
         assertEquals(FØDSELSNUMMER, behov.path("fødselsnummer").asString())
         assertEquals(vedtaksperiodeId.toString(), behov.path("vedtaksperiodeId").asString())
@@ -52,7 +54,7 @@ internal class MedlemskapsvurderingRiverTest {
 
         assertEquals(Grunnlagsbehov.Medlemskap, prøving.uteståendeBehov)
         assertEquals(1.februar til 28.februar, prøving.oppslagsperiode)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
@@ -65,14 +67,14 @@ internal class MedlemskapsvurderingRiverTest {
             rapid.inspektør.message(0).path("medlemskapsprøvingId"),
             rapid.inspektør.message(1).path("medlemskapsprøvingId"),
         )
-        assertEquals(1, transaksjon.medlemskapsprøvinger.allePrøvinger.size)
+        assertEquals(1, Lagret.prøvinger().size)
     }
 
     @Test
     fun `eksisterende vurdering løses umiddelbart`() {
         val vurdering =
             Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FØDSELSNUMMER, 1.februar, Medlemskapsstatus.Ja, Instant.now())
-        transaksjon.medlemskapsvurderinger.lagre(vurdering)
+        transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(vurdering) }
 
         rapid.sendTestMessage(medlemskapsvurderingBehov(1.februar, 1.februar, 28.februar))
 
@@ -86,7 +88,7 @@ internal class MedlemskapsvurderingRiverTest {
                 .asString(),
         )
         assertEquals(listOf("Medlemskapsvurdering"), løsning.path("@behov").toList().map { it.asString() })
-        assertTrue(transaksjon.medlemskapsprøvinger.allePrøvinger.isEmpty())
+        assertTrue(Lagret.prøvinger().isEmpty())
     }
 
     @Test
@@ -107,6 +109,6 @@ internal class MedlemskapsvurderingRiverTest {
         )
 
         assertEquals(0, rapid.inspektør.size)
-        assertTrue(transaksjon.medlemskapsprøvinger.allePrøvinger.isEmpty())
+        assertTrue(Lagret.prøvinger().isEmpty())
     }
 }

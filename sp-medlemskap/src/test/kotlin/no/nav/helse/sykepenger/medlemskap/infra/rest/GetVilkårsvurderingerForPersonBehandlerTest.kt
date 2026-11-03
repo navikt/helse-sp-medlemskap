@@ -13,14 +13,15 @@ import io.ktor.server.application.call
 import io.ktor.server.auth.authentication
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryMigreringsloggRepository
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisClientException
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
@@ -29,6 +30,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.*
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureContentNegotiation
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureResources
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
+import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.get
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
 import no.nav.helse.til
@@ -40,7 +42,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
-class GetVilkårsvurderingerForPersonBehandlerTest {
+internal class GetVilkårsvurderingerForPersonBehandlerTest : DatabaseTest() {
     private val saksbehandler = Saksbehandler(NavIdent("Z999999"), SaksbehandlerOid("oid"), "Test Testesen")
     private val identitetsnummer = Identitetsnummer("12345678901")
 
@@ -85,7 +87,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
 
     private fun Application.settOppTestapp(
         principal: SaksbehandlerPrincipal?,
-        transaksjonProvider: InMemoryTransaksjonProvider = InMemoryTransaksjonProvider(),
+        transaksjonProvider: TransaksjonProvider<Transaksjonskontekst> = Database.transaksjonProvider,
         tilgangskontroll: PopulasjonstilgangskontrollProvider = FakeTilgangskontroll(),
         personPseudoIdProvider: InMemoryPersonPseudoIdProvider = InMemoryPersonPseudoIdProvider(),
         spleisClient: ISpleisClient = FakeSpleisClient(),
@@ -179,10 +181,10 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     fun `vurdering som tilhoerer en annen person gir 404, lekker ikke andres data`() =
         testApplication {
             val enAnnenIdentitetsnummer = Identitetsnummer("98765432109")
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val andresVurdering =
                 automatiskVurdering(enAnnenIdentitetsnummer.value, LocalDate.of(2024, 1, 1))
-            transaksjonProvider.medlemskapsvurderinger.lagre(andresVurdering)
+            transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(andresVurdering) }
 
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
@@ -204,10 +206,10 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     @Test
     fun `responsen har diskriminator paa kilden`() =
         testApplication {
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val vurdering =
                 automatiskVurdering(identitetsnummer.value, LocalDate.of(2024, 2, 1))
-            transaksjonProvider.medlemskapsvurderinger.lagre(vurdering)
+            transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(vurdering) }
 
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
@@ -241,7 +243,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     @Test
     fun `infotrygdvurdering vises som medlem overført fra infotrygd`() =
         testApplication {
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val vurdering =
                 Medlemskapsvurdering.overførtFraInfotrygd(
                     id = MedlemskapsvurderingId.ny(),
@@ -249,7 +251,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
                     skjæringstidspunkt = LocalDate.of(2024, 2, 1),
                     vurdertTidspunkt = Instant.now(),
                 )
-            transaksjonProvider.medlemskapsvurderinger.lagre(vurdering)
+            transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(vurdering) }
 
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
@@ -309,7 +311,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
         testApplication {
             val etterspurt = spleisvurdering()
             val enAnnen = spleisvurdering()
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
 
@@ -327,19 +329,21 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
 
             assertEquals(
                 setOf(etterspurt.medlemskapsvurderingId, enAnnen.medlemskapsvurderingId),
-                transaksjonProvider.medlemskapsvurderinger.alleVurderinger
+                Lagret
+                    .vurderinger()
                     .map { it.id }
                     .toSet(),
             ) { "Alle personens vurderinger skal overføres, ikke bare den som ble etterspurt" }
             assertEquals(
                 setOf(identitetsnummer.value),
-                transaksjonProvider.medlemskapsvurderinger.alleVurderinger
+                Lagret
+                    .vurderinger()
                     .map { it.fødselsnummer }
                     .toSet(),
             )
             assertEquals(
-                InMemoryMigreringsloggRepository.Nedlasting(identitetsnummer.value, antallVurderinger = 2, antallHoppetOver = 0),
-                transaksjonProvider.migreringslogg.alleNedlastinger.single(),
+                Lagret.Nedlasting(identitetsnummer.value, antallVurderinger = 2, antallHoppetOver = 0),
+                Lagret.nedlastinger().single(),
             )
         }
 
@@ -348,7 +352,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
         testApplication {
             val spleisVurdering = spleisvurdering()
             val spleisClient = FakeSpleisClient(vurderinger = listOf(spleisVurdering))
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
 
@@ -362,16 +366,16 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             }
 
             assertEquals(1, spleisClient.antallKall)
-            assertEquals(1, transaksjonProvider.medlemskapsvurderinger.antallLagringer)
-            assertEquals(1, transaksjonProvider.migreringslogg.alleNedlastinger.size)
+            assertEquals(1, Lagret.antallVurderinger())
+            assertEquals(1, Lagret.nedlastinger().size)
         }
 
     @Test
     fun `vurderinger som allerede finnes i db lagres ikke paa nytt`() =
         testApplication {
             val spleisVurdering = spleisvurdering()
-            val transaksjonProvider = InMemoryTransaksjonProvider()
-            transaksjonProvider.medlemskapsvurderinger.lagre(spleisVurdering.tilMedlemskapsvurdering(identitetsnummer.value))
+            val transaksjonProvider = Database.transaksjonProvider
+            transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(spleisVurdering.tilMedlemskapsvurdering(identitetsnummer.value)) }
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
 
@@ -387,10 +391,10 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             val response = client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=${spleisVurdering.medlemskapsvurderingId.value}")
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals(1, transaksjonProvider.medlemskapsvurderinger.antallLagringer)
+            assertEquals(1, Lagret.antallVurderinger())
             assertEquals(
-                InMemoryMigreringsloggRepository.Nedlasting(identitetsnummer.value, antallVurderinger = 1, antallHoppetOver = 1),
-                transaksjonProvider.migreringslogg.alleNedlastinger.single(),
+                Lagret.Nedlasting(identitetsnummer.value, antallVurderinger = 1, antallHoppetOver = 1),
+                Lagret.nedlastinger().single(),
             )
         }
 
@@ -398,7 +402,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     fun `avstemmer ikke når saksbehandler mangler populasjonstilgang`() =
         testApplication {
             val spleisClient = FakeSpleisClient(vurderinger = listOf(spleisvurdering()))
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
 
@@ -416,8 +420,8 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
             assertEquals(0, spleisClient.antallKall)
-            assertEquals(0, transaksjonProvider.medlemskapsvurderinger.antallLagringer)
-            assertEquals(0, transaksjonProvider.migreringslogg.alleNedlastinger.size)
+            assertEquals(0, Lagret.antallVurderinger())
+            assertEquals(0, Lagret.nedlastinger().size)
         }
 
     @Test
@@ -487,10 +491,10 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
     @Test
     fun `spleis-api svikter, men vurderingen finnes allerede i db gir 200`() =
         testApplication {
-            val transaksjonProvider = InMemoryTransaksjonProvider()
+            val transaksjonProvider = Database.transaksjonProvider
             val vurdering =
                 automatiskVurdering(identitetsnummer.value, LocalDate.of(2024, 2, 1))
-            transaksjonProvider.medlemskapsvurderinger.lagre(vurdering)
+            transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(vurdering) }
             val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
 
@@ -506,7 +510,7 @@ class GetVilkårsvurderingerForPersonBehandlerTest {
             val response = client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=${vurdering.id.value}")
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals(0, transaksjonProvider.migreringslogg.alleNedlastinger.size) {
+            assertEquals(0, Lagret.nedlastinger().size) {
                 "Feilet avstemming skal ikke registreres, ellers prøver vi aldri igjen"
             }
         }

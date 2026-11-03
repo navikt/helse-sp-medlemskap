@@ -13,6 +13,9 @@ import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -22,122 +25,120 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-internal class MedlemskapServiceTest {
+internal class MedlemskapServiceTest : DatabaseTest() {
     private val versjonAvKode = "nais-app-image"
-    private val transaksjon = InMemoryTransaksjonProvider()
-    private val vurderinger = transaksjon.medlemskapsvurderinger
-    private val prøvinger = transaksjon.medlemskapsprøvinger
-    private val outbox = transaksjon.outbox
-    private val service = MedlemskapService(transaksjon, versjonAvKode)
+    private val transaksjon = Database.transaksjonProvider
     private val oppslagsperiode = 1.februar til 28.februar
+
+    private fun <T> service(block: (MedlemskapService) -> T) = transaksjon.transaksjon { block(MedlemskapService(it, versjonAvKode)) }
 
     @Test
     fun `uten eksisterende vurdering startes en prøving som venter på medlemskapsopplysninger`() {
-        val resultat = service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode)
+        val resultat = service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) }
 
         val trenger = assertIs<TrengerMedlemskapsopplysninger>(resultat)
-        val prøving = prøvinger.allePrøvinger.single()
+        val prøving = Lagret.prøvinger().single()
         assertEquals(TrengerMedlemskapsopplysninger(FNR, 1.februar, prøving.id, oppslagsperiode), trenger)
         assertEquals(Grunnlagsbehov.Medlemskap, prøving.uteståendeBehov)
-        assertEquals(0, vurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
     fun `pågående prøving gjenbrukes med samme oppslagsperiode`() {
-        val første = assertIs<TrengerMedlemskapsopplysninger>(service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode))
+        val første = assertIs<TrengerMedlemskapsopplysninger>(service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) })
 
-        val andre = service.vurderMedlemskap(FNR, 1.februar, 1.februar til 15.februar)
+        val andre = service { it.vurderMedlemskap(FNR, 1.februar, 1.februar til 15.februar) }
 
         assertEquals(første, andre)
-        assertEquals(1, prøvinger.allePrøvinger.size)
+        assertEquals(1, Lagret.prøvinger().size)
     }
 
     @Test
     fun `eksisterende vurdering gjenbrukes`() {
         val eksisterende = fullførtPrøving(Medlemskapsstatus.Ja)
 
-        val resultat = service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode)
+        val resultat = service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) }
 
         assertEquals(HarVurdering(FNR, 1.februar, eksisterende), resultat)
-        assertEquals(1, prøvinger.allePrøvinger.size)
+        assertEquals(1, Lagret.prøvinger().size)
     }
 
     @Test
     fun `vurdering overført fra Spleis gjenbrukes uten ny prøving`() {
         val overført = Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FNR, 1.februar, Medlemskapsstatus.Ja, Instant.now())
-        vurderinger.lagre(overført)
+        transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(overført) }
 
-        assertEquals(HarVurdering(FNR, 1.februar, overført.id), service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode))
-        assertTrue(prøvinger.allePrøvinger.isEmpty())
+        assertEquals(HarVurdering(FNR, 1.februar, overført.id), service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) })
+        assertTrue(Lagret.prøvinger().isEmpty())
     }
 
     @Test
     fun `svar fra medlemskapstjenesten gir automatisk vurdering`() {
-        val trenger = assertIs<TrengerMedlemskapsopplysninger>(service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode))
+        val trenger = assertIs<TrengerMedlemskapsopplysninger>(service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) })
 
         val resultat =
-            service.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Nei, FNR, 1.februar, trenger.medlemskapsprøvingId)
+            service { it.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Nei, FNR, 1.februar, trenger.medlemskapsprøvingId) }
 
         val ny = assertIs<BehandleGrunnlagResultat.NyVurderingForetatt>(resultat)
-        val vurdering = vurderinger.finn(ny.medlemskapsvurderingId)!!
+        val vurdering = transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.finn(ny.medlemskapsvurderingId) }!!
         assertEquals(Medlemskapsstatus.Nei, vurdering.status)
         assertFalse(vurdering.erOk)
         assertEquals(Vurderingskilde.Automatisk(trenger.medlemskapsprøvingId, oppslagsperiode, versjonAvKode), vurdering.kilde)
-        assertTrue(prøvinger.allePrøvinger.single().erAvsluttet)
-        assertTrue(outbox.upubliserteMeldinger.isEmpty(), "Spleis får vurderingen i svaret på behovet")
+        assertTrue(Lagret.prøvinger().single().erAvsluttet)
+        assertTrue(Lagret.upubliserteMeldinger().isEmpty(), "Spleis får vurderingen i svaret på behovet")
     }
 
     @Test
     fun `svar for en prøving som allerede er fullført ignoreres`() {
-        val trenger = assertIs<TrengerMedlemskapsopplysninger>(service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode))
-        service.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Ja, FNR, 1.februar, trenger.medlemskapsprøvingId)
+        val trenger = assertIs<TrengerMedlemskapsopplysninger>(service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) })
+        service { it.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Ja, FNR, 1.februar, trenger.medlemskapsprøvingId) }
 
         val resultat =
-            service.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Nei, FNR, 1.februar, trenger.medlemskapsprøvingId)
+            service { it.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Nei, FNR, 1.februar, trenger.medlemskapsprøvingId) }
 
         assertEquals(BehandleGrunnlagResultat.AlleredeVurdert, resultat)
-        assertEquals(1, vurderinger.antallLagringer)
+        assertEquals(1, Lagret.antallVurderinger())
     }
 
     @Test
     fun `svar for ukjent prøving avvises`() {
-        service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode)
+        service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) }
 
         val resultat =
-            service.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Ja, FNR, 1.februar, MedlemskapsprøvingId.ny())
+            service { it.behandleGrunnlagForAutomatiskMedlemskapsvurdering(Medlemskapsstatus.Ja, FNR, 1.februar, MedlemskapsprøvingId.ny()) }
 
         assertEquals(BehandleGrunnlagResultat.IngenPrøvingFunnet, resultat)
-        assertEquals(0, vurderinger.antallLagringer)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
     fun `ny vurdering krever en eksisterende vurdering`() {
-        assertEquals(VurderMedlemskapPåNyttResultat.IngenVurderingFunnet, service.vurderMedlemskapPåNytt(FNR, 1.februar))
+        assertEquals(VurderMedlemskapPåNyttResultat.IngenVurderingFunnet, service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
     }
 
     @Test
     fun `ny vurdering kan ikke startes mens en prøving pågår`() {
         fullførtPrøving(Medlemskapsstatus.Ja)
-        service.vurderMedlemskapPåNytt(FNR, 1.februar)
+        service { it.vurderMedlemskapPåNytt(FNR, 1.februar) }
 
-        assertEquals(VurderMedlemskapPåNyttResultat.PrøvingPågår, service.vurderMedlemskapPåNytt(FNR, 1.februar))
+        assertEquals(VurderMedlemskapPåNyttResultat.PrøvingPågår, service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
     }
 
     @Test
     fun `ny vurdering spør om samme periode som forrige prøving`() {
         fullførtPrøving(Medlemskapsstatus.Ja)
 
-        val resultat = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service.vurderMedlemskapPåNytt(FNR, 1.februar))
+        val resultat = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
 
         assertEquals(oppslagsperiode, resultat.oppslagsperiode)
-        assertEquals(2, prøvinger.allePrøvinger.size)
+        assertEquals(2, Lagret.prøvinger().size)
     }
 
     @Test
     fun `ny vurdering av manuell vurdering spør om skjæringstidspunktet`() {
-        vurderinger.lagre(Medlemskapsvurdering.avSaksbehandler(FNR, 1.februar, Medlemskapsstatus.Nei, "A123456", "Begrunnelse"))
+        transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(Medlemskapsvurdering.avSaksbehandler(FNR, 1.februar, Medlemskapsstatus.Nei, "A123456", "Begrunnelse")) }
 
-        val resultat = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service.vurderMedlemskapPåNytt(FNR, 1.februar))
+        val resultat = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
 
         assertEquals(1.februar til 1.februar, resultat.oppslagsperiode)
     }
@@ -145,22 +146,24 @@ internal class MedlemskapServiceTest {
     @Test
     fun `svar på ny vurdering lagrer vurderingen og melder fra via outbox`() {
         val forrige = fullførtPrøving(Medlemskapsstatus.Nei)
-        val venter = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service.vurderMedlemskapPåNytt(FNR, 1.februar))
+        val venter = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
 
         val resultat =
-            service.behandleGrunnlagForNyMedlemskapsvurdering(
-                svar = Medlemskapsstatus.Ja,
-                fødselsnummer = FNR,
-                skjæringstidspunkt = 1.februar,
-                medlemskapsprøvingId = venter.medlemskapsprøvingId,
-                saksbehandlerIdent = "A123456",
-            )
+            service {
+                it.behandleGrunnlagForNyMedlemskapsvurdering(
+                    svar = Medlemskapsstatus.Ja,
+                    fødselsnummer = FNR,
+                    skjæringstidspunkt = 1.februar,
+                    medlemskapsprøvingId = venter.medlemskapsprøvingId,
+                    saksbehandlerIdent = "A123456",
+                )
+            }
 
         val ny = assertIs<BehandleGrunnlagResultat.NyVurderingForetatt>(resultat)
         assertNotEquals(forrige, ny.medlemskapsvurderingId)
-        assertEquals(ny.medlemskapsvurderingId, vurderinger.gjeldende(FNR, 1.februar)!!.id)
+        assertEquals(ny.medlemskapsvurderingId, transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.gjeldende(FNR, 1.februar) }!!.id)
 
-        val meldinger = outbox.upubliserteMeldinger.map { it.melding }
+        val meldinger = Lagret.upubliserteMeldinger().map { it.melding }
         val handling = meldinger.filterIsInstance<OutboxMelding.Saksbehandlerhandling>().single()
         assertEquals(HandlingType.NY_AUTOMATISK_MEDLEMSKAPSVURDERING, handling.handlingType)
         assertEquals("A123456", handling.saksbehandlerIdent)
@@ -174,7 +177,7 @@ internal class MedlemskapServiceTest {
     fun `prøvinger på ulike skjæringstidspunkt er uavhengige`() {
         fullførtPrøving(Medlemskapsstatus.Ja)
 
-        assertIs<TrengerMedlemskapsopplysninger>(service.vurderMedlemskap(FNR, 1.januar, 1.januar til 31.januar))
+        assertIs<TrengerMedlemskapsopplysninger>(service { it.vurderMedlemskap(FNR, 1.januar, 1.januar til 31.januar) })
     }
 
     @Test
@@ -182,25 +185,25 @@ internal class MedlemskapServiceTest {
         val frist = Instant.parse("2018-02-01T12:30:00Z")
         val venter =
             assertIs<VurderMedlemskapResultat.VenterPåForhåndsvurdering>(
-                service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode, MedlemskapService.Forhåndsvurderingsforespørsel("vedtaksperiode", "{}", frist)),
+                service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode, MedlemskapService.Forhåndsvurderingsforespørsel("vedtaksperiode", "{}", frist)) },
             )
 
-        val resultat = service.behandleVentendeBehov(venter.medlemskapsprøvingId, frist.minusSeconds(1))
+        val resultat = service { it.behandleVentendeBehov(venter.medlemskapsprøvingId, frist.minusSeconds(1)) }
 
         assertEquals(BehandleVentendeBehovResultat.VenterFortsatt, resultat)
-        assertEquals(1, transaksjon.ventendeBehov.alleBehov.size)
+        assertEquals(1, Lagret.ventendeBehov().size)
     }
 
     @Test
     fun `ventende behov som er borte, er ikke lenger aktuelt`() {
-        val resultat = service.behandleVentendeBehov(MedlemskapsprøvingId.ny(), Instant.now())
+        val resultat = service { it.behandleVentendeBehov(MedlemskapsprøvingId.ny(), Instant.now()) }
 
         assertEquals(BehandleVentendeBehovResultat.IkkeLengerAktuelt, resultat)
     }
 
     private fun fullførtPrøving(status: Medlemskapsstatus): MedlemskapsvurderingId {
-        val trenger = assertIs<TrengerMedlemskapsopplysninger>(service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode))
-        val resultat = service.behandleGrunnlagForAutomatiskMedlemskapsvurdering(status, FNR, 1.februar, trenger.medlemskapsprøvingId)
+        val trenger = assertIs<TrengerMedlemskapsopplysninger>(service { it.vurderMedlemskap(FNR, 1.februar, oppslagsperiode) })
+        val resultat = service { it.behandleGrunnlagForAutomatiskMedlemskapsvurdering(status, FNR, 1.februar, trenger.medlemskapsprøvingId) }
         return assertIs<BehandleGrunnlagResultat.NyVurderingForetatt>(resultat).medlemskapsvurderingId
     }
 

@@ -7,10 +7,11 @@ import com.github.navikt.tbd_libs.rapids_and_rivers_api.OutgoingMessage
 import com.github.navikt.tbd_libs.rapids_and_rivers_api.RapidsConnection
 import com.github.navikt.tbd_libs.rapids_and_rivers_api.SentMessage
 import no.nav.helse.sykepenger.medlemskap.application.HandlingType
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.application.OutboxKonvolutt
 import no.nav.helse.sykepenger.medlemskap.application.OutboxKonvoluttId
 import no.nav.helse.sykepenger.medlemskap.application.OutboxMelding
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.leaderelection.LeaderElection
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -19,8 +20,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
-internal class OutboxPubliseringsjobbTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class OutboxPubliseringsjobbTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
 
     private fun nyMelding(id: UUID = UUID.randomUUID()) =
         OutboxMelding.MedlemskapsvurderingEndret(
@@ -40,7 +41,7 @@ internal class OutboxPubliseringsjobbTest {
         val jobb = nyJobb(rapid)
         val medlemskapsvurderingId = UUID.randomUUID()
         val melding = OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(medlemskapsvurderingId), identitetsnummer = Identitetsnummer("12029240045"))
-        transaksjon.outbox.leggTil(melding)
+        transaksjon.transaksjon { tx -> tx.outbox.leggTil(melding) }
 
         jobb.kjørEnRunde()
 
@@ -49,7 +50,7 @@ internal class OutboxPubliseringsjobbTest {
         assertEquals("endret_medlemskapsvurdering", publisert.path("@event_name").asString())
         assertEquals(medlemskapsvurderingId.toString(), publisert.path("medlemskapsvurderingId").asString())
         assertEquals(melding.identitetsnummer.value, rapid.inspektør.key(0))
-        assertTrue(transaksjon.outbox.hentUpubliserte().isEmpty())
+        assertTrue(transaksjon.transaksjon { tx -> tx.outbox.hentUpubliserte() }.isEmpty())
     }
 
     @Test
@@ -57,12 +58,12 @@ internal class OutboxPubliseringsjobbTest {
         val rapid = TestRapid()
         val jobb = nyJobb(rapid)
         val meldinger = (1..3).map { OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(), identitetsnummer = Identitetsnummer("12029240045")) }
-        meldinger.forEach { transaksjon.outbox.leggTil(it) }
+        meldinger.forEach { transaksjon.transaksjon { tx -> tx.outbox.leggTil(it) } }
 
         jobb.kjørEnRunde()
 
         assertEquals(3, rapid.inspektør.size)
-        assertTrue(transaksjon.outbox.hentUpubliserte().isEmpty())
+        assertTrue(transaksjon.transaksjon { tx -> tx.outbox.hentUpubliserte() }.isEmpty())
     }
 
     @Test
@@ -92,7 +93,7 @@ internal class OutboxPubliseringsjobbTest {
                     identitetsnummer = identitetsnummer,
                 ),
             )
-        meldinger.forEach(transaksjon.outbox::leggTil)
+        meldinger.forEach { verdi -> transaksjon.transaksjon { tx -> tx.outbox.leggTil(verdi) } }
 
         jobb.kjørEnRunde()
 
@@ -122,26 +123,28 @@ internal class OutboxPubliseringsjobbTest {
         val rapid = TestRapid()
         val jobb = nyJobb(rapid, isLeader = false)
         val melding = OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(), identitetsnummer = Identitetsnummer("12029240045"))
-        transaksjon.outbox.leggTil(melding)
+        transaksjon.transaksjon { tx -> tx.outbox.leggTil(melding) }
 
         jobb.kjørEnRundeHvisLeader()
 
         assertEquals(0, rapid.inspektør.size)
-        assertEquals(listOf(melding), transaksjon.outbox.hentUpubliserte())
+        assertEquals(listOf(melding), transaksjon.transaksjon { tx -> tx.outbox.hentUpubliserte() })
     }
 
     @Test
     fun `publiserer når poden er leader`() {
         val rapid = TestRapid()
         val jobb = nyJobb(rapid)
-        transaksjon.outbox.leggTil(
-            OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(), identitetsnummer = Identitetsnummer("12029240045")),
-        )
+        transaksjon.transaksjon { tx ->
+            tx.outbox.leggTil(
+                OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(), identitetsnummer = Identitetsnummer("12029240045")),
+            )
+        }
 
         jobb.kjørEnRundeHvisLeader()
 
         assertEquals(1, rapid.inspektør.size)
-        assertTrue(transaksjon.outbox.hentUpubliserte().isEmpty())
+        assertTrue(transaksjon.transaksjon { tx -> tx.outbox.hentUpubliserte() }.isEmpty())
     }
 
     @Test
@@ -149,11 +152,11 @@ internal class OutboxPubliseringsjobbTest {
         val sviktendeRapid = SvikterVedPubliseringRapid()
         val jobb = nyJobb(sviktendeRapid)
         val melding = OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(), identitetsnummer = Identitetsnummer("12029240045"))
-        transaksjon.outbox.leggTil(melding)
+        transaksjon.transaksjon { tx -> tx.outbox.leggTil(melding) }
 
         jobb.kjørEnRunde()
 
-        assertEquals(listOf(melding), transaksjon.outbox.hentUpubliserte())
+        assertEquals(listOf(melding), transaksjon.transaksjon { tx -> tx.outbox.hentUpubliserte() })
     }
 
     @Test
@@ -161,11 +164,11 @@ internal class OutboxPubliseringsjobbTest {
         val rapid = SvikterVedPubliseringNrRapid(feilerPå = 2)
         val jobb = nyJobb(rapid)
         val meldinger = (1..3).map { OutboxKonvolutt(id = OutboxKonvoluttId.ny(), melding = nyMelding(), identitetsnummer = Identitetsnummer("12029240045")) }
-        meldinger.forEach(transaksjon.outbox::leggTil)
+        meldinger.forEach { verdi -> transaksjon.transaksjon { tx -> tx.outbox.leggTil(verdi) } }
 
         jobb.kjørEnRunde()
 
-        assertEquals(meldinger.drop(1), transaksjon.outbox.hentUpubliserte())
+        assertEquals(meldinger.drop(1), transaksjon.transaksjon { tx -> tx.outbox.hentUpubliserte() })
     }
 
     private class SvikterVedPubliseringRapid : RapidsConnection() {

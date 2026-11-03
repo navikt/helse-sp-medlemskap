@@ -3,10 +3,12 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.februar
 import no.nav.helse.januar
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.domain.Grunnlagsbehov
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.sykepenger.medlemskap.leaderelection.LeaderElection
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
@@ -22,8 +24,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Flyten der behovet fra Spleis venter på en forhåndsvurdering før medlemskapstjenesten spørres direkte. */
-internal class VentPåForhåndsvurderingTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class VentPåForhåndsvurderingTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
     private val klokke = FlyttbarKlokke(Instant.parse("2018-02-01T12:00:00Z"))
     private val ventetid = Duration.ofMinutes(5)
     private val rapid =
@@ -45,9 +47,9 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(behov(id = behovId))
 
         assertEquals(0, rapid.inspektør.size)
-        val prøving = transaksjon.medlemskapsprøvinger.allePrøvinger.single()
+        val prøving = Lagret.prøvinger().single()
         assertEquals(Grunnlagsbehov.Forhåndsvurdering, prøving.uteståendeBehov)
-        val ventende = transaksjon.ventendeBehov.alleBehov.single()
+        val ventende = Lagret.ventendeBehov().single()
         assertEquals(klokke.instant().plus(ventetid), ventende.frist)
 
         jobb.kjørEnRunde()
@@ -60,7 +62,7 @@ internal class VentPåForhåndsvurderingTest {
         assertEquals(FØDSELSNUMMER, rapid.inspektør.key(0))
         val løsning = rapid.inspektør.message(0)
         assertEquals(behovId.toString(), løsning.path("@id").asString())
-        val vurdering = transaksjon.medlemskapsvurderinger.alleVurderinger.single()
+        val vurdering = Lagret.vurderinger().single()
         assertEquals(
             vurdering.id.toString(),
             løsning
@@ -71,8 +73,8 @@ internal class VentPåForhåndsvurderingTest {
         )
         assertEquals(Medlemskapsstatus.Ja, vurdering.status)
         assertEquals(søknadId, assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
-        assertTrue(prøving.erAvsluttet)
-        assertTrue(transaksjon.ventendeBehov.alleBehov.isEmpty())
+        assertTrue(Lagret.prøvinger().single().erAvsluttet)
+        assertTrue(Lagret.ventendeBehov().isEmpty())
     }
 
     @Test
@@ -82,7 +84,7 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(behov())
 
         assertEquals(1, rapid.inspektør.size)
-        val vurdering = transaksjon.medlemskapsvurderinger.alleVurderinger.single()
+        val vurdering = Lagret.vurderinger().single()
         assertEquals(Medlemskapsstatus.Nei, vurdering.status)
         assertEquals(
             vurdering.id.toString(),
@@ -93,7 +95,7 @@ internal class VentPåForhåndsvurderingTest {
                 .path("id")
                 .asString(),
         )
-        assertTrue(transaksjon.ventendeBehov.alleBehov.isEmpty())
+        assertTrue(Lagret.ventendeBehov().isEmpty())
     }
 
     @Test
@@ -106,7 +108,7 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(medlemskapsvurderingBehov(skjæringstidspunkt, 15.februar, 28.februar))
 
         assertEquals(1, rapid.inspektør.size)
-        val vurdering = transaksjon.medlemskapsvurderinger.alleVurderinger.single()
+        val vurdering = Lagret.vurderinger().single()
         assertEquals(søknadId, assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
     }
 
@@ -117,7 +119,7 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(behov())
 
         assertEquals(1, rapid.inspektør.size)
-        val vurdering = transaksjon.medlemskapsvurderinger.alleVurderinger.single()
+        val vurdering = Lagret.vurderinger().single()
         assertEquals(søknadId, assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
     }
 
@@ -128,7 +130,7 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(behov())
 
         assertEquals(0, rapid.inspektør.size)
-        assertEquals(1, transaksjon.ventendeBehov.alleBehov.size)
+        assertEquals(1, Lagret.ventendeBehov().size)
     }
 
     @Test
@@ -139,7 +141,7 @@ internal class VentPåForhåndsvurderingTest {
 
         rapid.sendTestMessage(behov())
 
-        val vurdering = transaksjon.medlemskapsvurderinger.alleVurderinger.single()
+        val vurdering = Lagret.vurderinger().single()
         assertEquals(Medlemskapsstatus.Ja, vurdering.status)
         assertEquals(sisteSøknadId, assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
     }
@@ -154,7 +156,7 @@ internal class VentPåForhåndsvurderingTest {
         jobb.kjørEnRunde()
 
         assertEquals(0, rapid.inspektør.size)
-        assertEquals(1, transaksjon.ventendeBehov.alleBehov.size)
+        assertEquals(1, Lagret.ventendeBehov().size)
     }
 
     @Test
@@ -171,7 +173,7 @@ internal class VentPåForhåndsvurderingTest {
 
         assertEquals(1, rapid.inspektør.size)
         val medlemskapsbehov = rapid.inspektør.message(0)
-        val prøving = transaksjon.medlemskapsprøvinger.allePrøvinger.single()
+        val prøving = Lagret.prøvinger().single()
         assertEquals(listOf("Medlemskap"), medlemskapsbehov.path("@behov").toList().map { it.asString() })
         assertEquals(prøving.id.toString(), medlemskapsbehov.path("medlemskapsprøvingId").asString())
         assertEquals(vedtaksperiodeId.toString(), medlemskapsbehov.path("vedtaksperiodeId").asString())
@@ -184,7 +186,7 @@ internal class VentPåForhåndsvurderingTest {
                 .asString(),
         )
         assertEquals(Grunnlagsbehov.Medlemskap, prøving.uteståendeBehov)
-        assertTrue(transaksjon.ventendeBehov.alleBehov.isEmpty())
+        assertTrue(Lagret.ventendeBehov().isEmpty())
 
         // En forhåndsvurdering som kommer for sent, brukes ikke
         rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
@@ -193,10 +195,10 @@ internal class VentPåForhåndsvurderingTest {
 
         rapid.sendTestMessage(løsMedlemskapsbehov(medlemskapsbehov, "UAVKLART_MED_BRUKERSPORSMAAL"))
 
-        val vurdering = transaksjon.medlemskapsvurderinger.alleVurderinger.single()
+        val vurdering = Lagret.vurderinger().single()
         assertEquals(Medlemskapsstatus.UavklartMedBrukerspørsmål, vurdering.status)
         assertNull(assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
-        assertTrue(prøving.erAvsluttet)
+        assertTrue(Lagret.prøvinger().single().erAvsluttet)
     }
 
     @Test
@@ -206,8 +208,8 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(behov(id = nyttBehovId))
 
         assertEquals(0, rapid.inspektør.size)
-        assertEquals(1, transaksjon.medlemskapsprøvinger.allePrøvinger.size)
-        val ventende = transaksjon.ventendeBehov.alleBehov.single()
+        assertEquals(1, Lagret.prøvinger().size)
+        val ventende = Lagret.ventendeBehov().single()
         assertEquals(nyttBehovId.toString(), jacksonObjectMapper().readTree(ventende.opprinneligBehov).path("@id").asString())
     }
 
@@ -218,20 +220,20 @@ internal class VentPåForhåndsvurderingTest {
         rapid.sendTestMessage(behov())
 
         assertEquals(2, rapid.inspektør.size)
-        assertEquals(1, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(1, Lagret.antallVurderinger())
     }
 
     @Test
     fun `løsning på Medlemskap-behov avvises mens prøvingen venter på forhåndsvurdering`() {
         rapid.sendTestMessage(behov())
-        val prøving = transaksjon.medlemskapsprøvinger.allePrøvinger.single()
+        val prøving = Lagret.prøvinger().single()
 
         val falsktBehov =
             Medlemskapsbehov.nytt(FØDSELSNUMMER, "vedtaksperiode", skjæringstidspunkt, prøving.id, prøving.oppslagsperiode)
         rapid.sendTestMessage(løsMedlemskapsbehov(jacksonObjectMapper().readTree(falsktBehov.toJson()), "JA"))
 
-        assertEquals(Grunnlagsbehov.Forhåndsvurdering, prøving.uteståendeBehov)
-        assertEquals(0, transaksjon.medlemskapsvurderinger.antallLagringer)
+        assertEquals(Grunnlagsbehov.Forhåndsvurdering, Lagret.prøvinger().single().uteståendeBehov)
+        assertEquals(0, Lagret.antallVurderinger())
     }
 
     @Test
@@ -251,7 +253,7 @@ internal class VentPåForhåndsvurderingTest {
         VentendeBehovjobb(rapid, transaksjon, LeaderElection { false }, "versjon", klokke).kjørEnRundeHvisLeader()
 
         assertEquals(0, rapid.inspektør.size)
-        assertEquals(1, transaksjon.ventendeBehov.alleBehov.size)
+        assertEquals(1, Lagret.ventendeBehov().size)
     }
 
     private fun assertMedlemskapsbehovUtenVenting() {
@@ -266,11 +268,12 @@ internal class VentPåForhåndsvurderingTest {
         )
         assertEquals(
             Grunnlagsbehov.Medlemskap,
-            transaksjon.medlemskapsprøvinger.allePrøvinger
+            Lagret
+                .prøvinger()
                 .single()
                 .uteståendeBehov,
         )
-        assertTrue(transaksjon.ventendeBehov.alleBehov.isEmpty())
+        assertTrue(Lagret.ventendeBehov().isEmpty())
     }
 
     private fun behov(

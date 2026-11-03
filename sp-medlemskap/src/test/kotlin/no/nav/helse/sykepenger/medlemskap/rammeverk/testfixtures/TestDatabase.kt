@@ -16,6 +16,10 @@ class TestDatabase private constructor(
     private val container: PostgreSQLContainer,
     val dataSource: DataSource,
 ) : AutoCloseable {
+    val jdbcUrl: String get() = container.jdbcUrl
+    val brukernavn: String get() = container.username
+    val passord: String get() = container.password
+
     fun migrer(locations: List<String> = listOf("classpath:db/migration")) {
         Flyway
             .configure()

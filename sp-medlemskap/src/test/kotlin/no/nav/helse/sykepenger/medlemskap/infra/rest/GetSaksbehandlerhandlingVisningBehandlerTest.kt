@@ -11,12 +11,15 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.routing.*
 import io.ktor.server.testing.*
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
+import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.domain.*
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.*
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureContentNegotiation
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureResources
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
+import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.get
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
 import no.nav.helse.til
@@ -28,7 +31,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.*
 
-class GetSaksbehandlerhandlingVisningBehandlerTest {
+internal class GetSaksbehandlerhandlingVisningBehandlerTest : DatabaseTest() {
     private val saksbehandler = Saksbehandler(NavIdent("Z999999"), SaksbehandlerOid("oid"), "Test Testesen")
     private val identitetsnummer = Identitetsnummer("12345678901")
     private val skjæringstidspunkt = LocalDate.of(2024, 1, 1)
@@ -207,8 +210,8 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
         tilganger: Set<Tilgang> = setOf(Tilgang.Les),
         tilgangskontroll: PopulasjonstilgangskontrollProvider = FakeTilgangskontroll(),
     ): String {
-        val transaksjonProvider = InMemoryTransaksjonProvider()
-        lagret.forEach { transaksjonProvider.medlemskapsvurderinger.lagre(it) }
+        val transaksjonProvider = Database.transaksjonProvider
+        lagret.forEach { transaksjonProvider.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(it) } }
         val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
         val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
         application {
@@ -224,7 +227,7 @@ class GetSaksbehandlerhandlingVisningBehandlerTest {
 
     private fun Application.settOppTestapp(
         principal: SaksbehandlerPrincipal,
-        transaksjonProvider: InMemoryTransaksjonProvider,
+        transaksjonProvider: TransaksjonProvider<Transaksjonskontekst>,
         tilgangskontroll: PopulasjonstilgangskontrollProvider,
         personPseudoIdProvider: InMemoryPersonPseudoIdProvider,
     ) {

@@ -2,10 +2,11 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.februar
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import org.junit.jupiter.api.Test
@@ -16,8 +17,8 @@ import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
 
-internal class MedlemskapsvurderingResultatRiverTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class MedlemskapsvurderingResultatRiverTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
     private val spleisvurderinger = mutableListOf<SpleisMedlemskapsvurdering>()
     private var antallSpleiskall = 0
     private val rapid =
@@ -47,7 +48,7 @@ internal class MedlemskapsvurderingResultatRiverTest {
         forventetOk: Boolean,
     ) {
         val vurdering = Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FØDSELSNUMMER, 1.februar, status, Instant.now())
-        transaksjon.medlemskapsvurderinger.lagre(vurdering)
+        transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(vurdering) }
 
         rapid.sendTestMessage(medlemskapsvurderingResultatBehov(vurdering.id))
 

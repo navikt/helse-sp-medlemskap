@@ -3,9 +3,11 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.februar
 import no.nav.helse.januar
-import no.nav.helse.sykepenger.medlemskap.application.InMemoryTransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
+import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
+import no.nav.helse.sykepenger.medlemskap.infra.db.Lagret
 import no.nav.helse.til
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -13,8 +15,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-internal class ForhåndsvurderingRiverTest {
-    private val transaksjon = InMemoryTransaksjonProvider()
+internal class ForhåndsvurderingRiverTest : DatabaseTest() {
+    private val transaksjon = Database.transaksjonProvider
     private val rapid =
         TestRapid().apply {
             ForhåndsvurderingRiver(this, transaksjon)
@@ -33,7 +35,7 @@ internal class ForhåndsvurderingRiverTest {
             ),
         )
 
-        val lagret = transaksjon.forhåndsvurderinger.alle.single()
+        val lagret = Lagret.forhåndsvurderinger().single()
         assertEquals(søknadId, lagret.søknadId)
         assertEquals(FØDSELSNUMMER, lagret.fødselsnummer)
         assertEquals(Medlemskapsstatus.UavklartMedBrukerspørsmål, lagret.status)
@@ -46,7 +48,7 @@ internal class ForhåndsvurderingRiverTest {
     fun `lagrer forhåndsvurdering uten årsaker`() {
         rapid.sendTestMessage("""{"soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA"}""")
 
-        val lagret = transaksjon.forhåndsvurderinger.alle.single()
+        val lagret = Lagret.forhåndsvurderinger().single()
         assertEquals(Medlemskapsstatus.Ja, lagret.status)
         assertNull(lagret.aarsaker)
         assertNull(lagret.gyldigForSkjæringstidspunkt)
@@ -58,7 +60,7 @@ internal class ForhåndsvurderingRiverTest {
         rapid.sendTestMessage(forhåndsvurderingMelding(gyldigFor = 1.februar til 28.februar, speilSvar = "KANSKJE"))
         rapid.sendTestMessage("""{"@event_name":"noe","soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA"}""")
 
-        assertTrue(transaksjon.forhåndsvurderinger.alle.isEmpty())
+        assertTrue(Lagret.forhåndsvurderinger().isEmpty())
     }
 
     @Test
@@ -69,7 +71,7 @@ internal class ForhåndsvurderingRiverTest {
         rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktTom":"2018-02-28""""))
         rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-28","gyldigForSkjaeringstidspunktTom":"2018-02-01""""))
 
-        assertTrue(transaksjon.forhåndsvurderinger.alle.isEmpty())
+        assertTrue(Lagret.forhåndsvurderinger().isEmpty())
     }
 
     private fun melding(datofelter: String) = """{"soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA",$datofelter}"""
