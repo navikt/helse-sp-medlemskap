@@ -19,6 +19,7 @@ internal class VurderingskildejsonTest {
             Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon"),
             Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", emptyList()),
             Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", listOf(Årsak("REGEL_3", "Forklaring"))),
+            Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", emptyList(), UUID.randomUUID()),
             Vurderingskilde.Saksbehandler("A123456", "Begrunnelse", listOf("1")),
             Vurderingskilde.OverførtFraSpleis,
             Vurderingskilde.OverførtFraInfotrygd,
@@ -70,6 +71,25 @@ internal class VurderingskildejsonTest {
             )
 
         assertEquals(Vurderingskilde.Automatisk(MedlemskapsprøvingId(prøvingId), 1.februar til 28.februar, "versjon", null), kilde)
+    }
+
+    @Test
+    fun `automatisk kilde fra forhåndsvurdering har stabilt format`() {
+        val prøvingId = UUID.fromString("6f1b8c8e-1d2c-4f7a-9a51-0d4c9b1e2f3a")
+        val søknadId = UUID.fromString("0b6b2c1e-3a3f-4c55-8f0e-2f1d7e9c4a10")
+
+        val json =
+            Vurderingskildejson.tilJson(
+                Vurderingskilde.Automatisk(MedlemskapsprøvingId(prøvingId), 1.februar til 28.februar, "versjon", emptyList(), søknadId),
+            )
+
+        assertEquals(
+            objectMapper.readTree(
+                """{"type":"AUTOMATISK","prøvingId":"$prøvingId","oppslagFom":"2018-02-01","oppslagTom":"2018-02-28","versjonAvKildekode":"versjon",
+                   "aarsaker":[],"forhåndsvurdertSøknadId":"$søknadId"}""",
+            ),
+            objectMapper.readTree(json),
+        )
     }
 
     @Test

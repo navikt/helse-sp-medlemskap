@@ -2,6 +2,7 @@ package no.nav.helse.sykepenger.medlemskap.domain
 
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 
 /**
  * Vurderingen av medlemskapsvilkåret for et skjæringstidspunkt. Vurderinger er immutable: en ny
@@ -24,13 +25,14 @@ internal data class Medlemskapsvurdering(
             status: Medlemskapsstatus,
             versjonAvKode: String,
             aarsaker: List<Årsak>? = null,
+            forhåndsvurdertSøknadId: UUID? = null,
         ) = Medlemskapsvurdering(
             id = MedlemskapsvurderingId.ny(),
             fødselsnummer = prøving.fødselsnummer,
             skjæringstidspunkt = prøving.skjæringstidspunkt,
             status = status,
             vurdertTidspunkt = Instant.now(),
-            kilde = Vurderingskilde.Automatisk(prøving.id, prøving.oppslagsperiode, versjonAvKode, aarsaker),
+            kilde = Vurderingskilde.Automatisk(prøving.id, prøving.oppslagsperiode, versjonAvKode, aarsaker, forhåndsvurdertSøknadId),
         )
 
         fun avSaksbehandler(

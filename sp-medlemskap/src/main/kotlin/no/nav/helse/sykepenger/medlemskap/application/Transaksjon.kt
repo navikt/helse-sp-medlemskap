@@ -5,4 +5,6 @@ internal interface Transaksjonskontekst {
     val medlemskapsvurderinger: MedlemskapsvurderingRepository
     val migreringslogg: MigreringsloggRepository
     val outbox: Outbox
+    val forhåndsvurderinger: ForhåndsvurderingRepository
+    val ventendeBehov: VentendeBehovRepository
 }

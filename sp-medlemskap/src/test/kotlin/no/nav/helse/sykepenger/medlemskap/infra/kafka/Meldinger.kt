@@ -1,5 +1,6 @@
 package no.nav.helse.sykepenger.medlemskap.infra.kafka
 
+import no.nav.helse.Periode
 import org.intellij.lang.annotations.Language
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
@@ -19,19 +20,43 @@ internal fun medlemskapsvurderingBehov(
     tom: LocalDate,
     fødselsnummer: String = FØDSELSNUMMER,
     vedtaksperiodeId: UUID = UUID.randomUUID(),
+    yrkesaktivitetstype: String = "ARBEIDSTAKER",
+    id: UUID = UUID.randomUUID(),
 ) = """
     {
       "@event_name": "behov",
-      "@id": "${UUID.randomUUID()}",
+      "@id": "$id",
       "@opprettet": "2018-02-01T12:00:00",
       "@behov": ["Medlemskapsvurdering"],
       "fødselsnummer": "$fødselsnummer",
       "vedtaksperiodeId": "$vedtaksperiodeId",
+      "yrkesaktivitetstype": "$yrkesaktivitetstype",
       "Medlemskapsvurdering": {
         "skjæringstidspunkt": "$skjæringstidspunkt",
         "medlemskapPeriodeFom": "$fom",
         "medlemskapPeriodeTom": "$tom"
       }
+    }
+    """
+
+/**
+ * Slik medlemskapstjenesten sender en forhåndsvurdering av en søknad på `medlemskap.medlemskapsvurderinger`.
+ * Er [gyldigFor] null, sendes ingen datoer.
+ */
+@Language("JSON")
+internal fun forhåndsvurderingMelding(
+    søknadId: Any = UUID.randomUUID(),
+    gyldigFor: Periode?,
+    speilSvar: String = "JA",
+    fødselsnummer: String = FØDSELSNUMMER,
+    @Language("JSON") aarsaker: String = "[]",
+) = """
+    {
+      "soknadId": "$søknadId",
+      ${gyldigFor?.let { "\"gyldigForSkjaeringstidspunktFom\": \"${it.start}\", \"gyldigForSkjaeringstidspunktTom\": \"${it.endInclusive}\"," } ?: ""}
+      "fnr": "$fødselsnummer",
+      "speilSvar": "$speilSvar",
+      "aarsaker": $aarsaker
     }
     """
 

@@ -17,16 +17,36 @@ import no.nav.sykepenger.libs.logging.loggInfo
 import no.nav.sykepenger.libs.logging.medMdc
 import tools.jackson.databind.JsonNode
 import tools.jackson.module.kotlin.jacksonObjectMapper
+import java.time.Clock
+import java.time.Duration
+
+/**
+ * Oppsett for å vente på en forhåndsvurdering fra medlemskapstjenesten før den spørres direkte.
+ * Medlemskapstjenesten forhåndsvurderer bare søknader fra arbeidstakere, så for andre
+ * yrkesaktiviteter spør vi direkte med en gang.
+ */
+internal class VentPåForhåndsvurdering(
+    private val ventetid: Duration,
+    private val klokke: Clock = Clock.systemUTC(),
+) {
+    fun frist() = klokke.instant().plus(ventetid)
+
+    fun kanForhåndsvurderes(yrkesaktivitetstype: String?) = yrkesaktivitetstype == "ARBEIDSTAKER"
+}
 
 /**
  * Løser behovet `Medlemskapsvurdering` fra Spleis med id-en til medlemskapsvurderingen for
  * skjæringstidspunktet. Finnes det ingen vurdering, startes en prøving og medlemskapsopplysninger
  * innhentes først, se [GrunnlagForAutomatiskMedlemskapsvurderingRiver].
+ *
+ * Er [ventPåForhåndsvurdering] satt og behovet gjelder en arbeidstaker, venter prøvingen først på en
+ * forhåndsvurdering for skjæringstidspunktet, se [VentendeBehovjobb].
  */
 internal class MedlemskapsvurderingRiver(
     rapidsConnection: RapidsConnection,
     private val transaksjonProvider: TransaksjonProvider<Transaksjonskontekst>,
     private val versjonAvKode: String = "test",
+    private val ventPåForhåndsvurdering: VentPåForhåndsvurdering? = null,
 ) : River.PacketListener {
     private val behovKey = "Medlemskapsvurdering"
 
@@ -43,6 +63,7 @@ internal class MedlemskapsvurderingRiver(
                     it.require("$behovKey.skjæringstidspunkt", JsonNode::asLocalDate)
                     it.require("$behovKey.medlemskapPeriodeFom", JsonNode::asLocalDate)
                     it.require("$behovKey.medlemskapPeriodeTom", JsonNode::asLocalDate)
+                    it.interestedIn("yrkesaktivitetstype")
                 }
             }.register(this)
     }
@@ -62,12 +83,14 @@ internal class MedlemskapsvurderingRiver(
         ) {
             loggInfo("Mottatt behov for $behovKey", "skjæringstidspunkt" to skjæringstidspunkt.toString())
 
+            val forhåndsvurdering = forhåndsvurderingsforespørsel(packet)
             val resultat =
                 transaksjonProvider.transaksjon { kontekst ->
                     MedlemskapService(kontekst, versjonAvKode).vurderMedlemskap(
                         fødselsnummer = fødselsnummer,
                         skjæringstidspunkt = skjæringstidspunkt,
                         oppslagsperiode = oppslagsperiode,
+                        forhåndsvurdering = forhåndsvurdering,
                     )
                 }
 
@@ -103,7 +126,24 @@ internal class MedlemskapsvurderingRiver(
                     )
                     context.publish(utgåendeBehov.toJson())
                 }
+
+                is VurderMedlemskapResultat.VenterPåForhåndsvurdering ->
+                    loggInfo(
+                        "Venter på forhåndsvurdering. Svarer på behovet senere",
+                        "medlemskapsprøvingId" to resultat.medlemskapsprøvingId.toString(),
+                        "skjæringstidspunkt" to skjæringstidspunkt.toString(),
+                    )
             }
         }
+    }
+
+    private fun forhåndsvurderingsforespørsel(packet: JsonMessage): MedlemskapService.Forhåndsvurderingsforespørsel? {
+        val vent = ventPåForhåndsvurdering ?: return null
+        if (!vent.kanForhåndsvurderes(packet["yrkesaktivitetstype"].takeIf { it.isString }?.asString())) return null
+        return MedlemskapService.Forhåndsvurderingsforespørsel(
+            vedtaksperiodeId = packet["vedtaksperiodeId"].asString(),
+            opprinneligBehov = packet.toJson(),
+            frist = vent.frist(),
+        )
     }
 }

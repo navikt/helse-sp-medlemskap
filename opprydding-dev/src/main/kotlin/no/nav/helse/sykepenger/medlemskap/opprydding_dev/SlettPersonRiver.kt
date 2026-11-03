@@ -47,8 +47,28 @@ internal class SlettPersonRiver(
         fødselsnummer: String,
     ) {
         slettMedlemskapsvurdering(tx, fødselsnummer)
+        slettVentendeBehov(tx, fødselsnummer)
         slettMedlemskapsproving(tx, fødselsnummer)
         slettMigreringslogg(tx, fødselsnummer)
+        slettForhåndsvurdering(tx, fødselsnummer)
+    }
+
+    private fun slettVentendeBehov(
+        tx: TransactionalSession,
+        fødselsnummer: String,
+    ) {
+        @Language("PostgreSQL")
+        val query = "DELETE FROM ventende_behov WHERE fødselsnummer = :fnr"
+        tx.run(queryOf(query, mapOf("fnr" to fødselsnummer)).asUpdate)
+    }
+
+    private fun slettForhåndsvurdering(
+        tx: TransactionalSession,
+        fødselsnummer: String,
+    ) {
+        @Language("PostgreSQL")
+        val query = "DELETE FROM forhandsvurdering WHERE fødselsnummer = :fnr"
+        tx.run(queryOf(query, mapOf("fnr" to fødselsnummer)).asUpdate)
     }
 
     private fun slettMigreringslogg(

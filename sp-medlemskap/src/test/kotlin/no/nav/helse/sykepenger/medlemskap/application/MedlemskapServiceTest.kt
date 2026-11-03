@@ -3,6 +3,7 @@ package no.nav.helse.sykepenger.medlemskap.application
 import no.nav.helse.februar
 import no.nav.helse.januar
 import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService.BehandleGrunnlagResultat
+import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService.BehandleVentendeBehovResultat
 import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService.VurderMedlemskapPåNyttResultat
 import no.nav.helse.sykepenger.medlemskap.application.VurderMedlemskapResultat.HarVurdering
 import no.nav.helse.sykepenger.medlemskap.application.VurderMedlemskapResultat.TrengerMedlemskapsopplysninger
@@ -174,6 +175,27 @@ internal class MedlemskapServiceTest {
         fullførtPrøving(Medlemskapsstatus.Ja)
 
         assertIs<TrengerMedlemskapsopplysninger>(service.vurderMedlemskap(FNR, 1.januar, 1.januar til 31.januar))
+    }
+
+    @Test
+    fun `ventende behov som venter, venter fortsatt til fristen`() {
+        val frist = Instant.parse("2018-02-01T12:30:00Z")
+        val venter =
+            assertIs<VurderMedlemskapResultat.VenterPåForhåndsvurdering>(
+                service.vurderMedlemskap(FNR, 1.februar, oppslagsperiode, MedlemskapService.Forhåndsvurderingsforespørsel("vedtaksperiode", "{}", frist)),
+            )
+
+        val resultat = service.behandleVentendeBehov(venter.medlemskapsprøvingId, frist.minusSeconds(1))
+
+        assertEquals(BehandleVentendeBehovResultat.VenterFortsatt, resultat)
+        assertEquals(1, transaksjon.ventendeBehov.alleBehov.size)
+    }
+
+    @Test
+    fun `ventende behov som er borte, er ikke lenger aktuelt`() {
+        val resultat = service.behandleVentendeBehov(MedlemskapsprøvingId.ny(), Instant.now())
+
+        assertEquals(BehandleVentendeBehovResultat.IkkeLengerAktuelt, resultat)
     }
 
     private fun fullførtPrøving(status: Medlemskapsstatus): MedlemskapsvurderingId {

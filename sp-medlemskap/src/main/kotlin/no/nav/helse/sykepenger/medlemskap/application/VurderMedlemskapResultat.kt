@@ -19,4 +19,11 @@ internal sealed class VurderMedlemskapResultat {
         val medlemskapsprøvingId: MedlemskapsprøvingId,
         val oppslagsperiode: Periode,
     ) : VurderMedlemskapResultat()
+
+    /** Prøvingen venter på en forhåndsvurdering; behovet holdes tilbake og besvares senere, se [VentendeBehov]. */
+    data class VenterPåForhåndsvurdering(
+        val fødselsnummer: String,
+        val skjæringstidspunkt: LocalDate,
+        val medlemskapsprøvingId: MedlemskapsprøvingId,
+    ) : VurderMedlemskapResultat()
 }

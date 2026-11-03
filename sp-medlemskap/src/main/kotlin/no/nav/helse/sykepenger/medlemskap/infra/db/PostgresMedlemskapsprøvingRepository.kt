@@ -47,6 +47,16 @@ internal class PostgresMedlemskapsprøvingRepository(
         )
     }
 
+    override fun finn(id: MedlemskapsprøvingId): Medlemskapsprøving? {
+        @Language("PostgreSQL")
+        val sql = """
+            select id, fødselsnummer, skjæringstidspunkt, oppslag_fom, oppslag_tom, startet, tilstand, utestående_behov, medlemskapsvurdering_id
+            from medlemskapsproving
+            where id = :id
+        """
+        return session.run(queryOf(sql, mapOf("id" to id.value)).map(::tilPrøving).asSingle)
+    }
+
     override fun finnSiste(
         fødselsnummer: String,
         skjæringstidspunkt: LocalDate,

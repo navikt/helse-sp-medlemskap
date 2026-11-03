@@ -1,10 +1,13 @@
 package no.nav.helse.sykepenger.medlemskap.application
 
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
+import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import java.time.LocalDate
 
 internal interface MedlemskapsprøvingRepository {
     fun lagre(prøving: Medlemskapsprøving)
+
+    fun finn(id: MedlemskapsprøvingId): Medlemskapsprøving?
 
     fun finnSiste(
         fødselsnummer: String,

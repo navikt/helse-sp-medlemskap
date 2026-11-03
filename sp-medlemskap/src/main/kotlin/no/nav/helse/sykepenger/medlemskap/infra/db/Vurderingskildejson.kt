@@ -28,6 +28,7 @@ private fun Vurderingskilde.tilDto(): VurderingskildeDto =
                 oppslagTom = oppslagsperiode.endInclusive,
                 versjonAvKildekode = versjonAvKildekode,
                 aarsaker = aarsaker?.map { ÅrsakDto(it.regelId, it.forklaringPaaUavklart) },
+                forhåndsvurdertSøknadId = forhåndsvurdertSøknadId,
             )
 
         is Vurderingskilde.Saksbehandler ->
@@ -46,6 +47,7 @@ private fun VurderingskildeDto.tilVurderingskilde(): Vurderingskilde =
                 oppslagsperiode = oppslagFom til oppslagTom,
                 versjonAvKildekode = versjonAvKildekode,
                 aarsaker = aarsaker?.map { Årsak(it.regelId, it.forklaringPaaUavklart) },
+                forhåndsvurdertSøknadId = forhåndsvurdertSøknadId,
             )
 
         is VurderingskildeDto.Saksbehandler ->

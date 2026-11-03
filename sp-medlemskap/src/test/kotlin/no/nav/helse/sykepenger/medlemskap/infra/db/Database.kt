@@ -15,6 +15,8 @@ internal object Database {
             "medlemskapsvurdering",
             "migreringslogg",
             "outbox",
+            "forhandsvurdering",
+            "ventende_behov",
         )
 
     fun antallRader(tabell: String) = database.antallRader(tabell)

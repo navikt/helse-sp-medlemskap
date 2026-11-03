@@ -11,11 +11,14 @@ import no.nav.helse.rapids_rivers.RapidApplication
 import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.infra.db.PostgresTransaksjonProvider
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.ForhåndsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForAutomatiskMedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForNyMedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingResultatRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.OutboxPubliseringsjobb
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.VentPåForhåndsvurdering
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.VentendeBehovjobb
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetMedlemskapshistorikkBehandler
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetSaksbehandlerhandlingVisningBehandler
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetVilkårsvurderingerForPersonBehandler
@@ -42,6 +45,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestRuting
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.configureRestRuting
 import no.nav.sykepenger.libs.logging.loggInfo
+import java.time.Duration
 
 private const val APP_NAVN = "sp-medlemskap"
 
@@ -53,6 +57,12 @@ data class AppKonfigurasjon(
     val tilganger: TilgangsgrupperTilTilganger,
     val openApi: OpenApiConfig,
     val valkeyInstansPersonPseudoId: String = "personpseudoid",
+    /**
+     * Hvor lenge en prøving venter på en forhåndsvurdering fra medlemskapstjenesten før den spør
+     * direkte. Er den ikke satt, spør vi alltid direkte. Settes med `FORHANDSVURDERING_VENTETID` på
+     * ISO 8601-format, for eksempel `PT5M`.
+     */
+    val forhåndsvurderingVentetid: Duration? = null,
 ) {
     companion object {
         fun fraEnv(
@@ -65,6 +75,7 @@ data class AppKonfigurasjon(
             populasjonstilgang = PopulasjonstilgangConfig.fraEnv(env),
             tilganger = TilgangsgrupperTilTilganger.fraEnv(env),
             openApi = OpenApiConfig.fraEnv(appNavn, env),
+            forhåndsvurderingVentetid = env["FORHANDSVURDERING_VENTETID"]?.let(Duration::parse),
         )
     }
 }
@@ -79,6 +90,15 @@ fun main() {
     migrerSynkront(konfigurasjon.database)
     val transaksjonProvider = PostgresTransaksjonProvider(dataSource)
     lateinit var rapidsConnection: RapidsConnection
+    val leaderElection =
+        NaisLeaderElection(
+            electorGetUrl = env.getValue("ELECTOR_GET_URL"),
+            hostname = env.getValue("HOSTNAME"),
+        )
+    val ventPåForhåndsvurdering =
+        konfigurasjon.forhåndsvurderingVentetid?.let { ventetid ->
+            VentPåForhåndsvurdering(ventetid = ventetid)
+        }
 
     RapidApplication
         .create(env, builder = {
@@ -109,6 +129,11 @@ fun main() {
                 rapidsConnection = this,
                 transaksjonProvider = transaksjonProvider,
                 versjonAvKode = versjonAvKode,
+                ventPåForhåndsvurdering = ventPåForhåndsvurdering,
+            )
+            ForhåndsvurderingRiver(
+                rapidsConnection = this,
+                transaksjonProvider = transaksjonProvider,
             )
             MedlemskapsvurderingResultatRiver(
                 rapidsConnection = this,
@@ -127,11 +152,16 @@ fun main() {
                 OutboxPubliseringsjobb(
                     rapidsConnection = this,
                     transaksjonProvider = transaksjonProvider,
-                    leaderElection =
-                        NaisLeaderElection(
-                            electorGetUrl = env.getValue("ELECTOR_GET_URL"),
-                            hostname = env.getValue("HOSTNAME"),
-                        ),
+                    leaderElection = leaderElection,
+                ),
+            )
+            // Registreres alltid, så prøvinger som venter blir ferdige selv om ventingen skrus av
+            register(
+                VentendeBehovjobb(
+                    rapidsConnection = this,
+                    transaksjonProvider = transaksjonProvider,
+                    leaderElection = leaderElection,
+                    versjonAvKode = versjonAvKode,
                 ),
             )
         }.start()

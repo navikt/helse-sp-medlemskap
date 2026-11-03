@@ -109,7 +109,7 @@ internal class PostgresMedlemskapsvurderingRepository(
     }
 }
 
-private fun Medlemskapsstatus.tilDbVerdi(): String =
+internal fun Medlemskapsstatus.tilDbVerdi(): String =
     when (this) {
         Medlemskapsstatus.Ja -> "JA"
         Medlemskapsstatus.Nei -> "NEI"
@@ -117,7 +117,7 @@ private fun Medlemskapsstatus.tilDbVerdi(): String =
         Medlemskapsstatus.UavklartMedBrukerspørsmål -> "UAVKLART_MED_BRUKERSPORSMAAL"
     }
 
-private fun String.tilMedlemskapsstatus(): Medlemskapsstatus =
+internal fun String.tilMedlemskapsstatus(): Medlemskapsstatus =
     when (this) {
         "JA" -> Medlemskapsstatus.Ja
         "NEI" -> Medlemskapsstatus.Nei

@@ -33,19 +33,26 @@ internal class SlettPersonRiverTest {
     fun `sletter all data for en person`() {
         val fødselsnummer = "01020312345"
 
-        insertMedlemskapsproving(fødselsnummer = fødselsnummer)
+        val prøvingId = UUID.randomUUID()
+        insertMedlemskapsproving(id = prøvingId, fødselsnummer = fødselsnummer)
         insertMedlemskapsvurdering(fødselsnummer = fødselsnummer)
         insertMigreringslogg(fødselsnummer = fødselsnummer)
+        insertVentendeBehov(prøvingId = prøvingId, fødselsnummer = fødselsnummer)
+        insertForhandsvurdering(fødselsnummer = fødselsnummer)
 
         assertEquals(1, Database.countMedlemskapsproving())
         assertEquals(1, Database.countMedlemskapsvurdering())
         assertEquals(1, Database.countMigreringslogg())
+        assertEquals(1, Database.countVentendeBehov())
+        assertEquals(1, Database.countForhandsvurdering())
 
         rapid.sendTestMessage(slettPersonMelding(fødselsnummer))
 
         assertEquals(0, Database.countMedlemskapsproving())
         assertEquals(0, Database.countMedlemskapsvurdering())
         assertEquals(0, Database.countMigreringslogg())
+        assertEquals(0, Database.countVentendeBehov())
+        assertEquals(0, Database.countForhandsvurdering())
     }
 
     @Test
@@ -60,12 +67,15 @@ internal class SlettPersonRiverTest {
         insertMedlemskapsvurdering(fødselsnummer = fødselsnummer2)
         insertMigreringslogg(fødselsnummer = fødselsnummer1)
         insertMigreringslogg(fødselsnummer = fødselsnummer2)
+        insertForhandsvurdering(fødselsnummer = fødselsnummer1)
+        insertForhandsvurdering(fødselsnummer = fødselsnummer2)
 
         rapid.sendTestMessage(slettPersonMelding(fødselsnummer1))
 
         assertEquals(1, Database.countMedlemskapsproving())
         assertEquals(1, Database.countMedlemskapsvurdering())
         assertEquals(1, Database.countMigreringslogg())
+        assertEquals(1, Database.countForhandsvurdering())
     }
 
     @Test
@@ -141,6 +151,41 @@ internal class SlettPersonRiverTest {
                     """
                 INSERT INTO migreringslogg (fødselsnummer, antall_vurderinger, antall_hoppet_over)
                 VALUES (?, 1, 0)
+                """,
+                ).use { stmt ->
+                    stmt.setString(1, fødselsnummer)
+                    stmt.executeUpdate()
+                }
+        }
+    }
+
+    private fun insertVentendeBehov(
+        prøvingId: UUID,
+        fødselsnummer: String,
+    ) {
+        Database.dataSource.connection.use { conn ->
+            conn
+                .prepareStatement(
+                    """
+                INSERT INTO ventende_behov
+                    (medlemskapsproving_id, fødselsnummer, vedtaksperiode_id, opprinnelig_behov, frist)
+                VALUES (?, ?, 'vedtaksperiode', '{}'::jsonb, now())
+                """,
+                ).use { stmt ->
+                    stmt.setObject(1, prøvingId)
+                    stmt.setString(2, fødselsnummer)
+                    stmt.executeUpdate()
+                }
+        }
+    }
+
+    private fun insertForhandsvurdering(fødselsnummer: String) {
+        Database.dataSource.connection.use { conn ->
+            conn
+                .prepareStatement(
+                    """
+                INSERT INTO forhandsvurdering (søknad_id, fødselsnummer, svar, melding)
+                VALUES (gen_random_uuid(), ?, 'JA', '{}'::jsonb)
                 """,
                 ).use { stmt ->
                     stmt.setString(1, fødselsnummer)

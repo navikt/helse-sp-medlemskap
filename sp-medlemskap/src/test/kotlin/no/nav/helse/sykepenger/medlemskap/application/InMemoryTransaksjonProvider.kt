@@ -7,6 +7,8 @@ internal class InMemoryTransaksjonProvider(
     override val medlemskapsvurderinger: InMemoryMedlemskapsvurderingRepository = InMemoryMedlemskapsvurderingRepository(),
     override val migreringslogg: InMemoryMigreringsloggRepository = InMemoryMigreringsloggRepository(),
     override val outbox: InMemoryOutbox = InMemoryOutbox(),
+    override val forhåndsvurderinger: InMemoryForhåndsvurderingRepository = InMemoryForhåndsvurderingRepository(),
+    override val ventendeBehov: InMemoryVentendeBehovRepository = InMemoryVentendeBehovRepository(),
 ) : TransaksjonProvider<Transaksjonskontekst>,
     Transaksjonskontekst {
     override fun <T> transaksjon(block: (Transaksjonskontekst) -> T): T = block(this)

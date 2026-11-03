@@ -22,4 +22,6 @@ private class PostgresTransaksjonskontekst(
     override val medlemskapsvurderinger = PostgresMedlemskapsvurderingRepository(session)
     override val migreringslogg = PostgresMigreringsloggRepository(session)
     override val outbox = PostgresOutbox(session)
+    override val forhåndsvurderinger = PostgresForhåndsvurderingRepository(session)
+    override val ventendeBehov = PostgresVentendeBehovRepository(session)
 }

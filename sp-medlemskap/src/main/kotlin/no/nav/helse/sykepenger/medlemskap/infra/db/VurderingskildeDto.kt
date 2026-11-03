@@ -22,6 +22,9 @@ internal sealed interface VurderingskildeDto {
         // Utelates når null, så formatet for vurderinger uten årsaker er uendret
         @get:JsonInclude(JsonInclude.Include.NON_NULL)
         val aarsaker: List<ÅrsakDto>? = null,
+        // Satt bare når svaret kom fra en forhåndsvurdering av søknaden
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val forhåndsvurdertSøknadId: UUID? = null,
     ) : VurderingskildeDto
 
     data class Saksbehandler(

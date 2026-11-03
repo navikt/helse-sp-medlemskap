@@ -41,6 +41,10 @@ object Database {
 
     fun countMigreringslogg(dataSource: DataSource = this.dataSource) = countRows("migreringslogg", dataSource)
 
+    fun countForhandsvurdering(dataSource: DataSource = this.dataSource) = countRows("forhandsvurdering", dataSource)
+
+    fun countVentendeBehov(dataSource: DataSource = this.dataSource) = countRows("ventende_behov", dataSource)
+
     private fun countRows(
         tabell: String,
         dataSource: DataSource,

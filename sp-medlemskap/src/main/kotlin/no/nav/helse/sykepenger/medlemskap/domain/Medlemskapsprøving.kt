@@ -8,10 +8,11 @@ import java.time.LocalDate
  * Prosessen som leder fram til en automatisk [Medlemskapsvurdering].
  *
  * Prøvingen eier livssyklusen — hva vi venter på, og om vi er ferdige — mens selve vurderingen er
- * resultatet den produserer. Medlemskap avgjøres alltid ut fra et oppslag mot medlemskapstjenesten
- * (via behovet `Medlemskap`, som sparkel-medlemskap løser), så en prøving starter alltid med å vente
- * på det svaret. Manuelle vurderinger og vurderinger overført fra Spleis eller Infotrygd har ingen
- * prøving, se [Vurderingskilde].
+ * resultatet den produserer. Medlemskap avgjøres alltid ut fra svar fra medlemskapstjenesten. Svaret
+ * kommer enten som en [Forhåndsvurdering] av søknaden, eller fra et oppslag (behovet `Medlemskap`, som
+ * sparkel-medlemskap løser). En prøving som venter på en forhåndsvurdering, går over til å vente på
+ * oppslaget hvis forhåndsvurderingen ikke kommer i tide. Manuelle vurderinger og vurderinger overført
+ * fra Spleis eller Infotrygd har ingen prøving, se [Vurderingskilde].
  */
 internal class Medlemskapsprøving private constructor(
     val id: MedlemskapsprøvingId,
@@ -28,6 +29,8 @@ internal class Medlemskapsprøving private constructor(
     val erAvsluttet get() = tilstand is Tilstand.Fullført
 
     val uteståendeBehov get() = (tilstand as? Tilstand.VenterPåGrunnlag)?.behov
+
+    val venterPåForhåndsvurdering get() = uteståendeBehov == Grunnlagsbehov.Forhåndsvurdering
 
     sealed interface Tilstand {
         data class VenterPåGrunnlag(
@@ -57,18 +60,46 @@ internal class Medlemskapsprøving private constructor(
         return vurdering
     }
 
+    /**
+     * Tar imot en forhåndsvurdering av søknaden og produserer medlemskapsvurderingen.
+     * Vurderingen og den oppdaterte prøvingen må lagres i samme transaksjon.
+     */
+    fun motta(
+        forhåndsvurdering: Forhåndsvurdering,
+        versjonAvKode: String = "test",
+    ): Medlemskapsvurdering {
+        check(venterPåForhåndsvurdering) { "Prøving $id venter ikke på forhåndsvurdering, men er i tilstand $tilstand" }
+        val vurdering =
+            Medlemskapsvurdering.automatisk(
+                prøving = this,
+                status = forhåndsvurdering.status,
+                versjonAvKode = versjonAvKode,
+                aarsaker = forhåndsvurdering.aarsaker,
+                forhåndsvurdertSøknadId = forhåndsvurdering.søknadId,
+            )
+        tilstand = Tilstand.Fullført(vurdering.id)
+        return vurdering
+    }
+
+    /** Forhåndsvurderingen kom ikke i tide. Prøvingen venter nå på et oppslag mot medlemskapstjenesten. */
+    fun slåOppIMedlemskapstjenesten() {
+        check(venterPåForhåndsvurdering) { "Prøving $id venter ikke på forhåndsvurdering, men er i tilstand $tilstand" }
+        tilstand = Tilstand.VenterPåGrunnlag(Grunnlagsbehov.Medlemskap)
+    }
+
     companion object {
         fun start(
             fødselsnummer: String,
             skjæringstidspunkt: LocalDate,
             oppslagsperiode: Periode,
+            førsteBehov: Grunnlagsbehov = Grunnlagsbehov.Medlemskap,
         ) = Medlemskapsprøving(
             id = MedlemskapsprøvingId.ny(),
             fødselsnummer = fødselsnummer,
             skjæringstidspunkt = skjæringstidspunkt,
             oppslagsperiode = oppslagsperiode,
             startet = Instant.now(),
-            tilstand = Tilstand.VenterPåGrunnlag(Grunnlagsbehov.Medlemskap),
+            tilstand = Tilstand.VenterPåGrunnlag(førsteBehov),
         )
 
         fun fraLagring(
@@ -83,5 +114,9 @@ internal class Medlemskapsprøving private constructor(
 }
 
 internal enum class Grunnlagsbehov {
+    /** Svar fra et oppslag mot medlemskapstjenesten, via behovet `Medlemskap`. */
     Medlemskap,
+
+    /** En [Forhåndsvurdering] av en søknad prøvingen kan bruke. */
+    Forhåndsvurdering,
 }

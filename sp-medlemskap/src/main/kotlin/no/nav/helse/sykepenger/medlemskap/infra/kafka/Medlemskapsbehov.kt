@@ -23,7 +23,7 @@ internal object Medlemskapsbehov {
     private const val AARSAKERFELT = "@løsning.$NAVN.resultat.aarsaker"
 
     // https://github.com/navikt/medlemskap-sykepengerlytter/blob/e4abb7bd5796357e9fe9bc1e6da77506f761c560/src/main/kotlin/no/nav/medlemskap/sykepenger/lytter/speil_medlemskapsvurdering/SpeilRespons.kt#L5-L10
-    private val svar =
+    val svar =
         mapOf(
             "JA" to Medlemskapsstatus.Ja,
             "NEI" to Medlemskapsstatus.Nei,
@@ -69,7 +69,7 @@ internal object Medlemskapsbehov {
             validate {
                 it.require("skjæringstidspunkt", JsonNode::asLocalDate)
                 it.requireAny(SVARFELT, svar.keys.toList())
-                it.interestedIn(AARSAKERFELT, ::lesAarsaker)
+                it.interestedIn(AARSAKERFELT) { node -> lesAarsaker(node) }
             }
         }
 
@@ -78,16 +78,20 @@ internal object Medlemskapsbehov {
     fun JsonMessage.aarsaker(): List<Årsak>? =
         this[AARSAKERFELT]
             .takeUnless { it.isMissingNode || it.isNull }
-            ?.let(::lesAarsaker)
+            ?.let { lesAarsaker(it) }
 
-    private fun lesAarsaker(node: JsonNode): List<Årsak> {
-        require(node.isArray) { "$AARSAKERFELT må være en liste" }
+    /** Leser årsaker på formatet `[{ regelId, forklaringPaaUavklart }]`, som medlemskapstjenesten bruker både i oppslag og forhåndsvurderinger. */
+    fun lesAarsaker(
+        node: JsonNode,
+        felt: String = AARSAKERFELT,
+    ): List<Årsak> {
+        require(node.isArray) { "$felt må være en liste" }
         return node.values().mapIndexed { indeks, aarsak ->
-            require(aarsak.isObject) { "$AARSAKERFELT[$indeks] må være et objekt" }
+            require(aarsak.isObject) { "$felt[$indeks] må være et objekt" }
             val regelId = aarsak.path("regelId")
             val forklaring = aarsak.path("forklaringPaaUavklart")
-            require(regelId.isString) { "$AARSAKERFELT[$indeks].regelId må være en streng" }
-            require(forklaring.isString) { "$AARSAKERFELT[$indeks].forklaringPaaUavklart må være en streng" }
+            require(regelId.isString) { "$felt[$indeks].regelId må være en streng" }
+            require(forklaring.isString) { "$felt[$indeks].forklaringPaaUavklart må være en streng" }
             Årsak(regelId.asString(), forklaring.asString())
         }
     }

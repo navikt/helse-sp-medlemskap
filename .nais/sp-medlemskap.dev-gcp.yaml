@@ -27,3 +27,8 @@ spec:
       value: 216b7219-3906-43c5-8e22-03fb74133b42 # 0000-CA-Speil_Lesetilgang
     - name: DB_POOL_SIZE
       value: "5"
+    # Slås på når team medlemskap har gitt sp-medlemskap lesetilgang til topicet. Uten tilgang starter ikke appen.
+    # - name: KAFKA_EXTRA_TOPIC
+    #   value: medlemskap.medlemskapsvurderinger
+    # - name: FORHANDSVURDERING_VENTETID
+    #   value: PT5M

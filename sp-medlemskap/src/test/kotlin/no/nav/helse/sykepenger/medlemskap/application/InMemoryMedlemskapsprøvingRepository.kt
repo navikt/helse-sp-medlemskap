@@ -1,6 +1,7 @@
 package no.nav.helse.sykepenger.medlemskap.application
 
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
+import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import java.time.LocalDate
 
 internal class InMemoryMedlemskapsprøvingRepository : MedlemskapsprøvingRepository {
@@ -19,6 +20,8 @@ internal class InMemoryMedlemskapsprøvingRepository : MedlemskapsprøvingReposi
         }
         prøvinger.add(prøving)
     }
+
+    override fun finn(id: MedlemskapsprøvingId) = prøvinger.firstOrNull { it.id == id }
 
     override fun finnSiste(
         fødselsnummer: String,
