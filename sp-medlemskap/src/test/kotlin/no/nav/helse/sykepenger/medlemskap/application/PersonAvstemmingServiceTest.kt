@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 internal class PersonAvstemmingServiceTest : DatabaseTest() {
@@ -174,10 +175,11 @@ internal class PersonAvstemmingServiceTest : DatabaseTest() {
         assertEquals(0, Lagret.nedlastinger().size)
     }
 
+    // Postgres lagrer mikrosekunder, mens Instant.now() kan ha nanosekunder på Linux
     private fun vurdering(status: Medlemskapsstatus = Medlemskapsstatus.Ja) =
         SpleisMedlemskapsvurdering.Spleis(
             medlemskapsvurderingId = MedlemskapsvurderingId(UUID.randomUUID()),
-            opprettet = Instant.now(),
+            opprettet = Instant.now().truncatedTo(ChronoUnit.MILLIS),
             skjæringstidspunkt = LocalDate.of(2026, 1, 1),
             status = status,
         )
