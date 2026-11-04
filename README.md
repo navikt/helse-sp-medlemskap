@@ -34,7 +34,7 @@ Spør vi medlemskapstjenesten direkte før den er ferdig med søknaden, kan vi f
 3. Er forhåndsvurderingen allerede mottatt, svarer appen med en gang. Hvis ikke, venter prøvingen på forhåndsvurderingen, og behovet lagres i `ventende_behov`. Kommer behovet på nytt mens prøvingen venter, erstatter det nye behovet det gamle.
 4. `VentendeBehovjobb` (leader, hvert 5. sekund) svarer på det ventende behovet når forhåndsvurderingen kommer. Har den ikke kommet innen fristen, sender jobben behovet `Medlemskap`, og flyten fortsetter som over.
 
-For andre yrkesaktiviteter spør appen medlemskapstjenesten direkte. En vurdering fra en forhåndsvurdering har `forhåndsvurdertSøknadId` i kilden.
+For andre yrkesaktiviteter spør appen medlemskapstjenesten direkte. En vurdering fra en forhåndsvurdering har `forhåndsvurdertSøknadId` og `forhåndsvurderingId` i kilden. `forhåndsvurderingId` peker på raden i `forhandsvurdering` som ble brukt.
 
 Funksjonen er av til `FORHANDSVURDERING_VENTETID` (ISO-8601, for eksempel `PT5M`) er satt. `KAFKA_EXTRA_TOPIC=medlemskap.medlemskapsvurderinger` må også være satt, ellers kommer forhåndsvurderingene aldri.
 

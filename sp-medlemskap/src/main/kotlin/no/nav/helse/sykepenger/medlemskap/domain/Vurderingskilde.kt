@@ -8,7 +8,8 @@ internal sealed interface Vurderingskilde {
     /**
      * Vurdert av sp-medlemskap ut fra svaret fra medlemskapstjenesten for [oppslagsperiode]. Er
      * [forhåndsvurdertSøknadId] satt, kom svaret fra en [Forhåndsvurdering] av den søknaden, ikke fra
-     * et oppslag.
+     * et oppslag. [forhåndsvurderingId] peker på den forhåndsvurderingen som ble brukt. Den mangler på
+     * vurderinger gjort før id-en fantes.
      */
     data class Automatisk(
         val medlemskapsprøvingId: MedlemskapsprøvingId,
@@ -16,6 +17,7 @@ internal sealed interface Vurderingskilde {
         val versjonAvKildekode: String,
         val aarsaker: List<Årsak>? = null,
         val forhåndsvurdertSøknadId: UUID? = null,
+        val forhåndsvurderingId: ForhåndsvurderingId? = null,
     ) : Vurderingskilde
 
     data class Saksbehandler(

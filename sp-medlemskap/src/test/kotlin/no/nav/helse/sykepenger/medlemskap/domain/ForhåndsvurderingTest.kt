@@ -47,5 +47,5 @@ internal class ForhåndsvurderingTest {
     private fun forhåndsvurdering(
         gyldigFor: Periode?,
         mottatt: Instant = Instant.now(),
-    ) = Forhåndsvurdering(UUID.randomUUID(), "12029240045", gyldigFor, Medlemskapsstatus.Ja, null, mottatt)
+    ) = Forhåndsvurdering(ForhåndsvurderingId.ny(), UUID.randomUUID(), "12029240045", gyldigFor, Medlemskapsstatus.Ja, null, mottatt)
 }

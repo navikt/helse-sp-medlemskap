@@ -4,6 +4,7 @@ import no.nav.helse.Periode
 import no.nav.helse.februar
 import no.nav.helse.januar
 import no.nav.helse.sykepenger.medlemskap.domain.Forhåndsvurdering
+import no.nav.helse.sykepenger.medlemskap.domain.ForhåndsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import no.nav.helse.til
@@ -49,6 +50,7 @@ internal class PostgresForhåndsvurderingRepositoryTest : DatabaseTest() {
         status: Medlemskapsstatus = Medlemskapsstatus.UavklartMedBrukerspørsmål,
         aarsaker: List<Årsak>? = emptyList(),
     ) = Forhåndsvurdering(
+        id = ForhåndsvurderingId.ny(),
         søknadId = UUID.randomUUID(),
         fødselsnummer = fødselsnummer,
         gyldigForSkjæringstidspunkt = gyldigFor,

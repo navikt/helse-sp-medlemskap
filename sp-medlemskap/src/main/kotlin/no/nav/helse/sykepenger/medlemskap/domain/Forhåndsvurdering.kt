@@ -16,9 +16,11 @@ import java.util.UUID
  *
  * [gyldigForSkjæringstidspunkt] er perioden medlemskapstjenesten sier vurderingen gjelder for. Den er
  * romslig, fordi medlemskapstjenesten ikke regner ut skjæringstidspunktet slik Spleis gjør. [søknadId]
- * er søknadens id hos Flex, og er bare med for sporing.
+ * er søknadens id hos Flex, og er bare med for sporing. Det kan komme flere forhåndsvurderinger for
+ * samme søknad, så [id] skiller dem fra hverandre.
  */
 internal data class Forhåndsvurdering(
+    val id: ForhåndsvurderingId,
     val søknadId: UUID,
     val fødselsnummer: String,
     val gyldigForSkjæringstidspunkt: Periode?,

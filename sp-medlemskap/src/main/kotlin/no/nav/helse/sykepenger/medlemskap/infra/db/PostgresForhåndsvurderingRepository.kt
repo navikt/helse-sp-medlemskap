@@ -5,6 +5,7 @@ import kotliquery.Session
 import kotliquery.queryOf
 import no.nav.helse.sykepenger.medlemskap.application.ForhåndsvurderingRepository
 import no.nav.helse.sykepenger.medlemskap.domain.Forhåndsvurdering
+import no.nav.helse.sykepenger.medlemskap.domain.ForhåndsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
 import no.nav.helse.til
 import org.intellij.lang.annotations.Language
@@ -22,13 +23,14 @@ internal class PostgresForhåndsvurderingRepository(
     ) {
         @Language("PostgreSQL")
         val sql = """
-            insert into forhandsvurdering (søknad_id, fødselsnummer, gyldig_fom, gyldig_tom, svar, aarsaker, melding, mottatt)
-            values (:soknadId, :fodselsnummer, :gyldigFom, :gyldigTom, :svar, cast(:aarsaker as jsonb), cast(:melding as jsonb), :mottatt)
+            insert into forhandsvurdering (id, søknad_id, fødselsnummer, gyldig_fom, gyldig_tom, svar, aarsaker, melding, mottatt)
+            values (:id, :soknadId, :fodselsnummer, :gyldigFom, :gyldigTom, :svar, cast(:aarsaker as jsonb), cast(:melding as jsonb), :mottatt)
         """
         session.run(
             queryOf(
                 sql,
                 mapOf(
+                    "id" to forhåndsvurdering.id.value,
                     "soknadId" to forhåndsvurdering.søknadId,
                     "fodselsnummer" to forhåndsvurdering.fødselsnummer,
                     "gyldigFom" to forhåndsvurdering.gyldigForSkjæringstidspunkt?.start,
@@ -45,7 +47,7 @@ internal class PostgresForhåndsvurderingRepository(
     override fun finn(fødselsnummer: String): List<Forhåndsvurdering> {
         @Language("PostgreSQL")
         val sql = """
-            select søknad_id, fødselsnummer, gyldig_fom, gyldig_tom, svar, aarsaker, mottatt
+            select id, søknad_id, fødselsnummer, gyldig_fom, gyldig_tom, svar, aarsaker, mottatt
             from forhandsvurdering
             where fødselsnummer = :fodselsnummer
             order by løpenummer desc
@@ -55,6 +57,7 @@ internal class PostgresForhåndsvurderingRepository(
 
     private fun tilForhåndsvurdering(row: Row) =
         Forhåndsvurdering(
+            id = ForhåndsvurderingId(row.uuid("id")),
             søknadId = row.uuid("søknad_id"),
             fødselsnummer = row.string("fødselsnummer"),
             gyldigForSkjæringstidspunkt = row.localDateOrNull("gyldig_fom")?.let { fom -> fom til row.localDate("gyldig_tom") },

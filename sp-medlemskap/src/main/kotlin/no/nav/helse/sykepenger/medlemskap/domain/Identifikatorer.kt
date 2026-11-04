@@ -23,3 +23,14 @@ internal value class MedlemskapsvurderingId(
         fun ny() = MedlemskapsvurderingId(UUID.randomUUID())
     }
 }
+
+@JvmInline
+internal value class ForhåndsvurderingId(
+    val value: UUID,
+) {
+    override fun toString() = value.toString()
+
+    companion object {
+        fun ny() = ForhåndsvurderingId(UUID.randomUUID())
+    }
+}

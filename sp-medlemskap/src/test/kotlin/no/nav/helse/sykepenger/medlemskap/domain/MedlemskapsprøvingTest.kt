@@ -72,11 +72,12 @@ internal class MedlemskapsprøvingTest {
         assertTrue(prøving.venterPåForhåndsvurdering)
         assertThrows<IllegalStateException> { prøving.motta(Medlemskapsstatus.Ja) }
 
-        val vurdering = prøving.motta(Forhåndsvurdering(søknadId, FNR, oppslagsperiode, Medlemskapsstatus.UavklartMedBrukerspørsmål, årsaker, Instant.now()), "abc123")
+        val forhåndsvurdering = Forhåndsvurdering(ForhåndsvurderingId.ny(), søknadId, FNR, oppslagsperiode, Medlemskapsstatus.UavklartMedBrukerspørsmål, årsaker, Instant.now())
+        val vurdering = prøving.motta(forhåndsvurdering, "abc123")
 
         assertTrue(prøving.erAvsluttet)
         assertEquals(Medlemskapsstatus.UavklartMedBrukerspørsmål, vurdering.status)
-        assertEquals(Vurderingskilde.Automatisk(prøving.id, oppslagsperiode, "abc123", årsaker, søknadId), vurdering.kilde)
+        assertEquals(Vurderingskilde.Automatisk(prøving.id, oppslagsperiode, "abc123", årsaker, søknadId, forhåndsvurdering.id), vurdering.kilde)
     }
 
     @Test
@@ -89,7 +90,7 @@ internal class MedlemskapsprøvingTest {
         assertEquals(Grunnlagsbehov.Medlemskap, prøving.uteståendeBehov)
         assertThrows<IllegalStateException> { prøving.slåOppIMedlemskapstjenesten() }
         assertThrows<IllegalStateException> {
-            prøving.motta(Forhåndsvurdering(UUID.randomUUID(), FNR, null, Medlemskapsstatus.Ja, null, Instant.now()))
+            prøving.motta(Forhåndsvurdering(ForhåndsvurderingId.ny(), UUID.randomUUID(), FNR, null, Medlemskapsstatus.Ja, null, Instant.now()))
         }
         prøving.motta(Medlemskapsstatus.Ja)
         assertTrue(prøving.erAvsluttet)

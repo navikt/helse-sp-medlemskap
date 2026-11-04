@@ -1,6 +1,7 @@
 package no.nav.helse.sykepenger.medlemskap.infra.db
 
 import no.nav.helse.februar
+import no.nav.helse.sykepenger.medlemskap.domain.ForhåndsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
@@ -20,6 +21,7 @@ internal class VurderingskildejsonTest {
             Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", emptyList()),
             Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", listOf(Årsak("REGEL_3", "Forklaring"))),
             Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", emptyList(), UUID.randomUUID()),
+            Vurderingskilde.Automatisk(MedlemskapsprøvingId.ny(), 1.februar til 28.februar, "versjon", emptyList(), UUID.randomUUID(), ForhåndsvurderingId.ny()),
             Vurderingskilde.Saksbehandler("A123456", "Begrunnelse", listOf("1")),
             Vurderingskilde.OverførtFraSpleis,
             Vurderingskilde.OverførtFraInfotrygd,
@@ -77,19 +79,41 @@ internal class VurderingskildejsonTest {
     fun `automatisk kilde fra forhåndsvurdering har stabilt format`() {
         val prøvingId = UUID.fromString("6f1b8c8e-1d2c-4f7a-9a51-0d4c9b1e2f3a")
         val søknadId = UUID.fromString("0b6b2c1e-3a3f-4c55-8f0e-2f1d7e9c4a10")
+        val forhåndsvurderingId = UUID.fromString("9d2e7c41-5b8a-4e0f-a3c6-1f4b8d2e6a97")
 
         val json =
             Vurderingskildejson.tilJson(
-                Vurderingskilde.Automatisk(MedlemskapsprøvingId(prøvingId), 1.februar til 28.februar, "versjon", emptyList(), søknadId),
+                Vurderingskilde.Automatisk(
+                    MedlemskapsprøvingId(prøvingId),
+                    1.februar til 28.februar,
+                    "versjon",
+                    emptyList(),
+                    søknadId,
+                    ForhåndsvurderingId(forhåndsvurderingId),
+                ),
             )
 
         assertEquals(
             objectMapper.readTree(
                 """{"type":"AUTOMATISK","prøvingId":"$prøvingId","oppslagFom":"2018-02-01","oppslagTom":"2018-02-28","versjonAvKildekode":"versjon",
-                   "aarsaker":[],"forhåndsvurdertSøknadId":"$søknadId"}""",
+                   "aarsaker":[],"forhåndsvurdertSøknadId":"$søknadId","forhåndsvurderingId":"$forhåndsvurderingId"}""",
             ),
             objectMapper.readTree(json),
         )
+    }
+
+    @Test
+    fun `automatisk kilde fra forhåndsvurdering lagret før forhåndsvurderingId fantes kan leses`() {
+        val prøvingId = UUID.fromString("6f1b8c8e-1d2c-4f7a-9a51-0d4c9b1e2f3a")
+        val søknadId = UUID.fromString("0b6b2c1e-3a3f-4c55-8f0e-2f1d7e9c4a10")
+
+        val kilde =
+            Vurderingskildejson.fraJson(
+                """{"type":"AUTOMATISK","prøvingId":"$prøvingId","oppslagFom":"2018-02-01","oppslagTom":"2018-02-28","versjonAvKildekode":"versjon",
+                   "aarsaker":[],"forhåndsvurdertSøknadId":"$søknadId"}""",
+            )
+
+        assertEquals(Vurderingskilde.Automatisk(MedlemskapsprøvingId(prøvingId), 1.februar til 28.februar, "versjon", emptyList(), søknadId, null), kilde)
     }
 
     @Test

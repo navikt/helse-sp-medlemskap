@@ -1,5 +1,6 @@
 package no.nav.helse.sykepenger.medlemskap.infra.db
 
+import no.nav.helse.sykepenger.medlemskap.domain.ForhåndsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
@@ -29,6 +30,7 @@ private fun Vurderingskilde.tilDto(): VurderingskildeDto =
                 versjonAvKildekode = versjonAvKildekode,
                 aarsaker = aarsaker?.map { ÅrsakDto(it.regelId, it.forklaringPaaUavklart) },
                 forhåndsvurdertSøknadId = forhåndsvurdertSøknadId,
+                forhåndsvurderingId = forhåndsvurderingId?.value,
             )
 
         is Vurderingskilde.Saksbehandler ->
@@ -48,6 +50,7 @@ private fun VurderingskildeDto.tilVurderingskilde(): Vurderingskilde =
                 versjonAvKildekode = versjonAvKildekode,
                 aarsaker = aarsaker?.map { Årsak(it.regelId, it.forklaringPaaUavklart) },
                 forhåndsvurdertSøknadId = forhåndsvurdertSøknadId,
+                forhåndsvurderingId = forhåndsvurderingId?.let(::ForhåndsvurderingId),
             )
 
         is VurderingskildeDto.Saksbehandler ->

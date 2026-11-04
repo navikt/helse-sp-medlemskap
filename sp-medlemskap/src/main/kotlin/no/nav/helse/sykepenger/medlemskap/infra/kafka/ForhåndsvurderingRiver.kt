@@ -11,6 +11,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import no.nav.helse.Periode
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.domain.Forhåndsvurdering
+import no.nav.helse.sykepenger.medlemskap.domain.ForhåndsvurderingId
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.til
 import no.nav.sykepenger.libs.logging.MdcKey
@@ -67,6 +68,7 @@ internal class ForhåndsvurderingRiver(
         val fødselsnummer = packet["fnr"].asString()
         val forhåndsvurdering =
             Forhåndsvurdering(
+                id = ForhåndsvurderingId.ny(),
                 søknadId = packet["soknadId"].asUUID(),
                 fødselsnummer = fødselsnummer,
                 gyldigForSkjæringstidspunkt = gyldigForSkjæringstidspunkt(packet),
@@ -80,6 +82,7 @@ internal class ForhåndsvurderingRiver(
             transaksjonProvider.transaksjon { it.forhåndsvurderinger.lagre(forhåndsvurdering, packet.toJson()) }
             loggInfo(
                 "Lagret forhåndsvurdering fra medlemskapstjenesten",
+                "forhåndsvurderingId" to forhåndsvurdering.id.toString(),
                 "søknadId" to forhåndsvurdering.søknadId.toString(),
                 "gyldigForSkjæringstidspunkt" to forhåndsvurdering.gyldigForSkjæringstidspunkt.toString(),
                 "status" to forhåndsvurdering.status.name,

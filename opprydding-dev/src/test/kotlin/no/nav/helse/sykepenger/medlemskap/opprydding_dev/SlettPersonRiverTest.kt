@@ -184,8 +184,8 @@ internal class SlettPersonRiverTest {
             conn
                 .prepareStatement(
                     """
-                INSERT INTO forhandsvurdering (søknad_id, fødselsnummer, svar, melding)
-                VALUES (gen_random_uuid(), ?, 'JA', '{}'::jsonb)
+                INSERT INTO forhandsvurdering (id, søknad_id, fødselsnummer, svar, melding)
+                VALUES (gen_random_uuid(), gen_random_uuid(), ?, 'JA', '{}'::jsonb)
                 """,
                 ).use { stmt ->
                     stmt.setString(1, fødselsnummer)

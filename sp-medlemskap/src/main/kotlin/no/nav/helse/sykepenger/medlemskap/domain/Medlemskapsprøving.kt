@@ -75,7 +75,7 @@ internal class Medlemskapsprøving private constructor(
                 status = forhåndsvurdering.status,
                 versjonAvKode = versjonAvKode,
                 aarsaker = forhåndsvurdering.aarsaker,
-                forhåndsvurdertSøknadId = forhåndsvurdering.søknadId,
+                forhåndsvurdering = forhåndsvurdering,
             )
         tilstand = Tilstand.Fullført(vurdering.id)
         return vurdering

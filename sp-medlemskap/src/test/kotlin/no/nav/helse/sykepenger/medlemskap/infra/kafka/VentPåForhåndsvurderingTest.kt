@@ -73,6 +73,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
         )
         assertEquals(Medlemskapsstatus.Ja, vurdering.status)
         assertEquals(søknadId, assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
+        assertEquals(Lagret.forhåndsvurderinger().single().id, assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurderingId)
         assertTrue(Lagret.prøvinger().single().erAvsluttet)
         assertTrue(Lagret.ventendeBehov().isEmpty())
     }
@@ -147,6 +148,20 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
     }
 
     @Test
+    fun `peker på den forhåndsvurderingen som ble brukt når samme søknad er forhåndsvurdert flere ganger`() {
+        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "UAVKLART_MED_BRUKERSPORSMAAL"))
+        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+
+        rapid.sendTestMessage(behov())
+
+        val brukt = Lagret.forhåndsvurderinger().last()
+        val kilde = assertIs<Vurderingskilde.Automatisk>(Lagret.vurderinger().single().kilde)
+        assertEquals(Medlemskapsstatus.Ja, brukt.status)
+        assertEquals(søknadId, kilde.forhåndsvurdertSøknadId)
+        assertEquals(brukt.id, kilde.forhåndsvurderingId)
+    }
+
+    @Test
     fun `bruker ikke forhåndsvurdering for et annet skjæringstidspunkt eller en annen person`() {
         rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, 2.februar til 28.februar, "JA"))
         rapid.sendTestMessage(forhåndsvurderingMelding(UUID.randomUUID(), gyldigFor, "JA", fødselsnummer = "01010112345"))
@@ -198,6 +213,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
         val vurdering = Lagret.vurderinger().single()
         assertEquals(Medlemskapsstatus.UavklartMedBrukerspørsmål, vurdering.status)
         assertNull(assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurdertSøknadId)
+        assertNull(assertIs<Vurderingskilde.Automatisk>(vurdering.kilde).forhåndsvurderingId)
         assertTrue(Lagret.prøvinger().single().erAvsluttet)
     }
 

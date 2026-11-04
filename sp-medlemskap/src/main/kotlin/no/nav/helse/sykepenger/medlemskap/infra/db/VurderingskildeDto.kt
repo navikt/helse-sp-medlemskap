@@ -25,6 +25,9 @@ internal sealed interface VurderingskildeDto {
         // Satt bare når svaret kom fra en forhåndsvurdering av søknaden
         @get:JsonInclude(JsonInclude.Include.NON_NULL)
         val forhåndsvurdertSøknadId: UUID? = null,
+        // Satt bare når svaret kom fra en forhåndsvurdering. Mangler på vurderinger gjort før id-en fantes
+        @get:JsonInclude(JsonInclude.Include.NON_NULL)
+        val forhåndsvurderingId: UUID? = null,
     ) : VurderingskildeDto
 
     data class Saksbehandler(
