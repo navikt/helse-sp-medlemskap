@@ -69,15 +69,15 @@ jobs:
       contents: read
       id-token: write # for nais login
 
-#  deploy-prod:
-#    name: Deploy til prod
-#    needs: bygg-image
-#    if: ${{ github.ref_name == 'main' }}
-#    uses: navikt/sykepenger-github-workflows/.github/workflows/deploy-v2.yml@b34afa2e28c72e92d6c3ef2f9607f982b0a8283f # v1.0.14
-#    with:
-#      manifest: .nais/sp-medlemskap.yaml
-#      environment: prod-gcp
-#      image: ${{ needs.bygg-image.outputs.image_ref }}
-#    permissions:
-#      contents: read
-#      id-token: write # for nais login
+  deploy-prod:
+    name: Deploy til prod
+    needs: bygg-image
+    if: ${{ github.ref_name == 'main' }}
+    uses: navikt/sykepenger-github-workflows/.github/workflows/deploy-v2.yml@b34afa2e28c72e92d6c3ef2f9607f982b0a8283f # v1.0.14
+    with:
+      manifest: .nais/sp-medlemskap.yaml
+      environment: prod-gcp
+      image: ${{ needs.bygg-image.outputs.image_ref }}
+    permissions:
+      contents: read
+      id-token: write # for nais login
