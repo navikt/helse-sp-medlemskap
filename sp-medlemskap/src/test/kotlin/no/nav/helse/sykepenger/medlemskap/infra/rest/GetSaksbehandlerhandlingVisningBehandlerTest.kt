@@ -52,10 +52,10 @@ internal class GetSaksbehandlerhandlingVisningBehandlerTest : DatabaseTest() {
             val felter = response.json()["felter"]
             assertEquals(3, felter.size())
             assertTekst(felter[0], "Medlemskap", "Medlem i folketrygden")
-            assertTekst(felter[1], "Begrunnelse", "Fritekst fra saksbehandler\nmed linjeskift")
-            assertEquals("LISTE", felter[2]["type"].asString())
-            assertEquals("Journalposter", felter[2]["tittel"].asString())
-            assertEquals(listOf("598373838", "598373839"), felter[2]["elementer"].values().map { it.asString() })
+            assertEquals("LISTE", felter[1]["type"].asString())
+            assertEquals("Journalposter", felter[1]["tittel"].asString())
+            assertEquals(listOf("598373838", "598373839"), felter[1]["elementer"].values().map { it.asString() })
+            assertTekst(felter[2], "Begrunnelse", "Fritekst fra saksbehandler\nmed linjeskift")
         }
 
     @Test

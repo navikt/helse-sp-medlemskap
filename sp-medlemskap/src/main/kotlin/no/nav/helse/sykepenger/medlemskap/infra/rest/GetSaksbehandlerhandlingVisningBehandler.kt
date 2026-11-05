@@ -59,10 +59,10 @@ private fun tilVisningsfelter(
 ): List<ApiVisningsfelt> =
     buildList {
         add(ApiVisningsfelt.Tekst(tittel = "Medlemskap", tekst = status.visningsnavn()))
-        add(ApiVisningsfelt.Tekst(tittel = "Begrunnelse", tekst = kilde.fritekstbegrunnelse))
         if (kilde.journalpostId.isNotEmpty()) {
             add(ApiVisningsfelt.Liste(tittel = "Journalposter", elementer = kilde.journalpostId))
         }
+        add(ApiVisningsfelt.Tekst(tittel = "Begrunnelse", tekst = kilde.fritekstbegrunnelse))
     }
 
 private fun Medlemskapsstatus.visningsnavn(): String =
