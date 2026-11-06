@@ -632,6 +632,8 @@ Varslene er flyttet bak den samme togglen. `ok` er ikke nok til å velge varsel,
 
 Varslene kommer derfor bare én gang, og de følger statusen beregningen faktisk bruker.
 
+Ved vilkårsprøving kom varselet bare én gang per vilkårsgrunnlag. Ved beregning kommer det for hver periode som beregnes, også forlengelser og revurderinger. Saksbehandlere har utbetalt saker med `UAVKLART_MED_BRUKERSPORSMAAL` og `NEI` uten å endre vurderingen. Da fikk alle forlengelser varselet på nytt da togglen ble skrudd på i prod. Spleis gir derfor ikke varselet hvis det allerede er fattet vedtak på en periode med samme `medlemskapsvurderingId`. Saksbehandler har da allerede tatt stilling til vurderingen. En ny vurdering fra sp-medlemskap får ny id og gir varselet på nytt. Testene ligger i `MedlemskapE2E`.
+
 ### 6b. Vis den nye appen i Speil uten å migrere
 
 sp-medlemskap har to brytere. Begge er av som standard og står som `"true"` i `.nais/sp-medlemskap.dev-gcp.yaml`:
@@ -675,6 +677,17 @@ Her skiller medlemskap seg fra opptjening. For opptjening regnet Spleis fortsatt
 
 - Avklar med LovMe at dobbelt volum er greit i en periode, og sammenlign som i [steg 7](#steg-7-den-nye-appen-gjør-vurderingen). Spleis sender allerede begge behovene når togglen er på. Skal Spleis vinne ved avvik, må sammenligningen ligge i `MedlemskapsvurderingResultatRiver` i sp-medlemskap, slik [`a0329a9`](https://github.com/navikt/helse-sp-vilkarsproving/commit/a0329a91d199f415cbe3bf03f7b28a972853cdc9) gjorde for opptjening.
 - Hopp over sammenligningen. sp-medlemskap gjør det samme oppslaget som Spleis gjør i dag, så risikoen er mindre enn for opptjening, der vurderingslogikken var skrevet på nytt.
+
+#### Varsler når sp-medlemskap gjenbruker vurderingen
+
+Spleis gir ikke medlemskapsvarselet hvis det allerede er fattet vedtak med samme `medlemskapsvurderingId` (se [steg 6](#6-spleis-spør-den-nye-appen-om-resultatet)). Med togglen av gir hver vilkårsprøving en ny tilfeldig id, og dermed nytt varsel. Med togglen på gjenbruker sp-medlemskap vurderingen for personen og skjæringstidspunktet. Vilkårsprøves en periode på nytt med samme skjæringstidspunkt, får grunnlaget samme id, og Spleis gir ikke varselet på nytt. Det er riktig: Saksbehandler har allerede tatt stilling til akkurat den vurderingen. Skal medlemskapet vurderes på nytt, må det skje i sp-medlemskap. Den nye vurderingen får ny id og kommer til Spleis som `endret_medlemskapsvurdering`.
+
+Gamle og nye saker får ulik historikk:
+
+- **Gamle saker:** Før sp-medlemskap kunne saksbehandler godkjenne en sak med `UAVKLART_MED_BRUKERSPORSMAAL` eller `NEI` ved å huke av varselet i Speil. Vurderingen ble ikke endret. I sp-medlemskap står vurderingen fortsatt med det opprinnelige svaret. At saksbehandler godtok den, går bare fram av vedtaket. Vi lager ikke en `JA`-vurdering i ettertid, fordi ingen har gjort den vurderingen.
+- **Nye saker:** Saksbehandler skal lage en manuell vurdering (`JA` eller `NEI`) i sp-medlemskap i stedet for å godkjenne på tross av varselet. Da får vurderingen ny id, begrunnelse og journalpost.
+
+Spleis tvinger ikke fram den nye praksisen. Godkjenner saksbehandler fortsatt på tross av `UAVKLART_MED_BRUKERSPORSMAAL`, får forlengelser ikke varselet heller. Skal en manuell vurdering være påkrevd, må det håndheves der saksbehandler godkjenner, i Spesialist eller Speil. Spleis skal ikke gjøre det ved å varsle på nytt ved hver forlengelse.
 
 ### 8. Migrer historikken
 
