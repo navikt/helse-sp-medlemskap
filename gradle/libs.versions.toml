@@ -1,11 +1,11 @@
 [versions]
-flyway = "13.11.1"
+flyway = "13.12.0"
 kotlinx-coroutines = "1.11.0"
 # Må følge Kotlin-versjonen som no.nav.sykepenger.kotlin-pluginen bruker
 kotlin = "2.4.21"
 kotlinx-serialization-json = "1.12.0"
 ktor = "3.6.1"
-sykepenger-logging = "20261105.1956"
+sykepenger-logging = "20261106.1049"
 mockk = "1.14.11"
 smiley4-ktor-openapi-tools = "5.7.0"
 smiley4-schema-kenerator = "2.7.2"
