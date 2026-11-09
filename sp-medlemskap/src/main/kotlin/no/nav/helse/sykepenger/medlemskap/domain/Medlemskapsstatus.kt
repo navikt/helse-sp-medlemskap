@@ -13,4 +13,7 @@ internal enum class Medlemskapsstatus {
 
     /** Bare et avklart nei stopper utbetaling; uavklarte svar gir varsel i Spleis, men ikke avslag. */
     val erOk: Boolean get() = this != Nei
+
+    /** Uavklart behandles som medlem i Spleis, så årsakene fra medlemskapstjenesten vises ikke for saksbehandler. */
+    val skalViseÅrsaker: Boolean get() = this != Uavklart
 }

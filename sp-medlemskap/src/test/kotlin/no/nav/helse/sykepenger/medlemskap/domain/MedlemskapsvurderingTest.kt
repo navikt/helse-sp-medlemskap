@@ -66,6 +66,14 @@ internal class MedlemskapsvurderingTest {
         assertEquals(Vurderingskilde.OverførtFraSpleis, vurdering.kilde)
     }
 
+    @Test
+    fun `årsakene vises for alle statuser unntatt uavklart`() {
+        assertTrue(Medlemskapsstatus.Ja.skalViseÅrsaker)
+        assertTrue(Medlemskapsstatus.Nei.skalViseÅrsaker)
+        assertFalse(Medlemskapsstatus.Uavklart.skalViseÅrsaker)
+        assertTrue(Medlemskapsstatus.UavklartMedBrukerspørsmål.skalViseÅrsaker)
+    }
+
     private companion object {
         const val FNR = "12029240045"
     }

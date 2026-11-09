@@ -32,7 +32,7 @@ private fun Medlemskapsvurdering.tilApi() =
         medlemskapOk = erOk,
         status = status.tilApi(),
         vurdertTidspunkt = vurdertTidspunkt,
-        kilde = kilde.tilApi(),
+        kilde = kilde.tilApi(visÅrsaker = status.skalViseÅrsaker),
     )
 
 private fun Medlemskapsstatus.tilApi(): ApiMedlemskapsstatus =
@@ -43,13 +43,18 @@ private fun Medlemskapsstatus.tilApi(): ApiMedlemskapsstatus =
         Medlemskapsstatus.UavklartMedBrukerspørsmål -> ApiMedlemskapsstatus.UAVKLART_MED_BRUKERSPORSMAAL
     }
 
-private fun Vurderingskilde.tilApi(): ApiVurderingskilde =
+private fun Vurderingskilde.tilApi(visÅrsaker: Boolean): ApiVurderingskilde =
     when (this) {
         is Vurderingskilde.Automatisk ->
             ApiVurderingskilde.Automatisk(
                 versjonAvKildekode = versjonAvKildekode,
                 oppslagsperiode = ApiPeriode(fom = oppslagsperiode.start, tom = oppslagsperiode.endInclusive),
-                årsaker = aarsaker.orEmpty().map { ApiÅrsak(regelId = it.regelId, forklaringPaaUavklart = it.forklaringPaaUavklart) },
+                årsaker =
+                    if (visÅrsaker) {
+                        aarsaker.orEmpty().map { ApiÅrsak(regelId = it.regelId, forklaringPaaUavklart = it.forklaringPaaUavklart) }
+                    } else {
+                        emptyList()
+                    },
             )
 
         is Vurderingskilde.Saksbehandler ->

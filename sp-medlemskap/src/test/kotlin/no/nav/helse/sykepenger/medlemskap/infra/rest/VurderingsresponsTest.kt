@@ -33,7 +33,7 @@ internal class VurderingsresponsTest {
         val vurdering =
             Medlemskapsprøving
                 .start(FNR, 1.februar, 1.januar til 31.januar)
-                .motta(Medlemskapsstatus.Uavklart, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
+                .motta(Medlemskapsstatus.UavklartMedBrukerspørsmål, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
 
         val krav = Vurderingsrespons.fra(vurdering).krav.single()
 
@@ -41,6 +41,31 @@ internal class VurderingsresponsTest {
             ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar), listOf(ApiÅrsak("REGEL_3", "Forklaring"))),
             krav.kilde,
         )
+    }
+
+    @Test
+    fun `uavklart vurdering viser ikke årsakene`() {
+        val vurdering =
+            Medlemskapsprøving
+                .start(FNR, 1.februar, 1.januar til 31.januar)
+                .motta(Medlemskapsstatus.Uavklart, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
+
+        val krav = Vurderingsrespons.fra(vurdering).krav.single()
+
+        assertEquals(ApiMedlemskapsstatus.UAVKLART, krav.status)
+        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), krav.kilde)
+    }
+
+    @Test
+    fun `historikken viser ikke årsakene til uavklart vurdering`() {
+        val vurdering =
+            Medlemskapsprøving
+                .start(FNR, 1.februar, 1.januar til 31.januar)
+                .motta(Medlemskapsstatus.Uavklart, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
+
+        val innslag = Vurderingsrespons.historikk(1.februar, listOf(vurdering)).historikk.single()
+
+        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), innslag.medlemskapsvurdering.kilde)
     }
 
     @ParameterizedTest
