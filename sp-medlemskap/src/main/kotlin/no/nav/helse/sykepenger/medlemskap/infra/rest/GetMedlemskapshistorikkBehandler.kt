@@ -10,8 +10,13 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.KallKontekst
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestResponse
 import no.nav.sykepenger.libs.logging.loggWarn
 
+/**
+ * Er [migrerVedOppslag] av, slås vurderingene fra Spleis sammen med de lagrede uten at de lagres. Se
+ * [GetVilkårsvurderingerForPersonBehandler].
+ */
 internal class GetMedlemskapshistorikkBehandler(
     private val avstemmingService: PersonAvstemmingService,
+    private val migrerVedOppslag: Boolean = true,
 ) : GetBehandler<ApiMedlemskapshistorikkResource, ApiMedlemskapshistorikkResponse, ApiMedlemskapshistorikkFeil, Transaksjonskontekst> {
     override val påkrevdTilgang = Tilgang.Les
     override val tag = "vilkarsvurderinger"
@@ -29,6 +34,24 @@ internal class GetMedlemskapshistorikkBehandler(
             personIkkeFunnet = { ApiMedlemskapshistorikkFeil.PersonIkkeFunnet },
             manglerTilgang = { ApiMedlemskapshistorikkFeil.ManglerTilgang },
         ) { identitetsnummer ->
+            if (!migrerVedOppslag) {
+                val fraSpleis =
+                    try {
+                        avstemmingService.hentMedlemskapsvurderingerSomIkkeErMigrert(identitetsnummer.value)
+                    } catch (ex: SpleisClientException) {
+                        loggWarn("Feil ved oppslag av medlemskapsvurderinger i Spleis", ex)
+                        return@medPerson RestResponse.feil(ApiMedlemskapshistorikkFeil.SpleisUtilgjengelig)
+                    }
+                val lagret =
+                    kallKontekst.transaksjon.medlemskapsvurderinger
+                        .historikk(identitetsnummer.value, resource.skjæringstidspunkt)
+                val lagredeIder = lagret.map { it.id }.toSet()
+                val historikk =
+                    (lagret + fraSpleis.filter { it.skjæringstidspunkt == resource.skjæringstidspunkt && it.id !in lagredeIder })
+                        .sortedByDescending { it.vurdertTidspunkt }
+                return@medPerson RestResponse.ok(Vurderingsrespons.historikk(resource.skjæringstidspunkt, historikk))
+            }
+
             // Avstemming kaller bare spleis for personer som ikke er migrert ennå. Feiler den, mangler
             // vi altså spleis' del av historikken, og et ufullstendig svar ville sett ut som en fullstendig historikk.
             try {

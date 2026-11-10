@@ -31,3 +31,7 @@ spec:
       value: medlemskap.medlemskapsvurderinger
     - name: FORHANDSVURDERING_VENTETID
       value: PT5M
+    - name: MIGRER_VED_OPPSLAG
+      value: "true"
+    - name: OVERSTYRING_AV_MEDLEMSKAP
+      value: "true"

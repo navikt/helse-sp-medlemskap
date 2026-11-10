@@ -15,9 +15,11 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestResponse
 import no.nav.sykepenger.libs.logging.loggInfo
 import java.time.LocalDate
 
+/** Er [overstyringErSkruddPå] av, avvises kallet. Se [PostManuellVilkårsvurderingBehandler]. */
 internal class PostNyAutomatiskVilkårsvurderingBehandler(
     private val publiser: (key: String, melding: String) -> Unit,
     private val versjonAvKode: String = "test",
+    private val overstyringErSkruddPå: Boolean = true,
 ) : PostBehandler<
         ApiNyAutomatiskVilkårsvurderingResource,
         ApiNyAutomatiskVilkårsvurderingRequest,
@@ -33,6 +35,8 @@ internal class PostNyAutomatiskVilkårsvurderingBehandler(
         request: ApiNyAutomatiskVilkårsvurderingRequest,
         kallKontekst: KallKontekst<Transaksjonskontekst>,
     ): RestResponse<ApiNyAutomatiskVilkårsvurderingResponse, ApiNyAutomatiskVilkårsvurderingFeil> {
+        if (!overstyringErSkruddPå) return RestResponse.feil(ApiNyAutomatiskVilkårsvurderingFeil.OverstyringErSkruddAv)
+
         val personPseudoId =
             PersonPseudoId.fraString(resource.personId)
                 ?: return RestResponse.feil(ApiNyAutomatiskVilkårsvurderingFeil.PersonIkkeFunnet)

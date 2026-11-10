@@ -17,6 +17,7 @@ Datoene under er commit-datoer. Lenkene peker til [navikt/helse-spleis](https://
 - [Steg 4: Kanal for endrede vurderinger](#steg-4-kanal-for-endrede-vurderinger)
 - [Steg 5: Reserveløsningen i den nye appen](#steg-5-reserveløsningen-i-den-nye-appen)
 - [Steg 6: Spleis spør den nye appen om resultatet](#steg-6-spleis-spør-den-nye-appen-om-resultatet)
+- [Steg 6b: Vis den nye appen i Speil uten å migrere](#steg-6b-vis-den-nye-appen-i-speil-uten-å-migrere)
 - [Steg 7: Den nye appen gjør vurderingen](#steg-7-den-nye-appen-gjør-vurderingen)
 - [Steg 8: Migrer historikken](#steg-8-migrer-historikken)
 - [Steg 9: Id-en i godkjenningsbehovet](#steg-9-id-en-i-godkjenningsbehovet)
@@ -322,6 +323,22 @@ Dagen etter ble togglen skrudd på i prod ([`4e6d1ab`](https://github.com/navikt
 - Behovet sendes ved hver beregning, ikke bare ved vilkårsprøving. Da plukker Spleis opp endringer i vurderingen ved neste beregning.
 - Fra 27.08 kan ikke Spleis beregne uten at sp-vilkarsproving svarer.
 
+## Steg 6b: Vis den nye appen i Speil uten å migrere
+
+Opptjening hadde ikke dette steget. Speil begynte å lese fra sp-vilkarsproving samtidig med at migreringen ved oppslag ble slått på i steg 8. Steget er lagt til i ettertid fordi vi vil se den nye visningen i prod før den nye appen gjør vurderingen selv.
+
+**Hva:** Speil viser vurderingen fra den nye appen i prod, men bare for utviklere og uten at noe endres:
+
+- Den nye appen leser fra databasen sin og faller tilbake på Spleis-API-et, men lagrer ikke det den henter fra Spleis.
+- Overstyring er stengt, både i den nye appen og i Speil.
+
+**Hvorfor:** Vi får prøvd ut tilgang, svartid og visningen i prod med ekte data, uten å endre resultatet og uten å starte migreringen.
+
+**Viktig i rekkefølgen:**
+- Steg 3 og 5 må være i prod. Speil trenger id-en på grunnlaget, og den nye appen må kunne hente fra Spleis-API-et.
+- Endepunktene som Speil bruker, migrerer personen ved oppslag. Det må være skrudd av til steg 8. Ellers starter migreringen før steg 7 er på (se [steg 8](#steg-8-migrer-historikken)).
+- Overstyring gir en ny vurdering i den nye appen. Den må være stengt til steg 4 er i prod, så Spleis får beskjed om endringen, og til steg 7 er på, så Spleis ikke lager vurderinger ved siden av.
+
 ## Steg 7: Den nye appen gjør vurderingen
 
 **Hva:** Ved vilkårsprøving sender Spleis behovet `Opptjeningsvurdering` med skjæringstidspunkt og arbeidssituasjon. sp-vilkarsproving vurderer, lagrer vurderingen og svarer med id-en. Spleis lagrer id-en på det nye vilkårsgrunnlaget.
@@ -472,6 +489,7 @@ Oppskriften passer for alle vilkår der Spleis lagrer et resultat på vilkårsgr
 4. **Kanal for endrede vurderinger** ([steg 4](#steg-4-kanal-for-endrede-vurderinger)). Lag `endret_<vilkår>vurdering` i `EndretVurderingPåSkjæringstidspunkt`, slik at grunnlaget får ny id og blir revurdert. Steget kan vente til den nye appen faktisk skal publisere nye vurderinger, men må være i prod før det skjer (se [Når kan kanalen utsettes](#når-kan-kanalen-for-endrede-vurderinger-utsettes)).
 5. **Reserveløsningen i den nye appen** ([steg 5](#steg-5-reserveløsningen-i-den-nye-appen)). Når id-en er ukjent, henter appen svaret fra Spleis-API-et. Deploy i prod før steg 6 skrus på i prod.
 6. **Spleis spør den nye appen om resultatet** ([steg 6](#steg-6-spleis-spør-den-nye-appen-om-resultatet)). Send `<Vilkår>vurderingResultat` ved beregning, bak toggle. Bruk svaret i stedet for Spleis sitt eget. Dev først, så prod. Fjern toggle og reserveløsning i Spleis når det går bra.
+   - **6b. Vis den nye appen i Speil uten å migrere** ([steg 6b](#steg-6b-vis-den-nye-appen-i-speil-uten-å-migrere)). La Speil lese fra den nye appen i prod, bare for utviklere. Skru av migrering ved oppslag og overstyring i prod til steg 7 og 8.
 7. **Den nye appen gjør vurderingen** ([steg 7](#steg-7-den-nye-appen-gjør-vurderingen)). Send `<Vilkår>vurdering` ved vilkårsprøving, bak toggle. Lagre id-en på det nye grunnlaget. Sammenlign med Spleis sitt svar i en periode, og la Spleis vinne ved avvik.
 8. **Migrer historikken** ([steg 8](#steg-8-migrer-historikken)) ved oppslag og med `person_avstemming`.
 9. **Id-en i godkjenningsbehovet** ([steg 9](#steg-9-id-en-i-godkjenningsbehovet)). Legg id-en i `Godkjenningsbehov`. Det kan gjøres når som helst etter steg 2.
@@ -525,6 +543,7 @@ Status for hvert steg:
 | 4. Kanal for endrede vurderinger | Laget i Spleis. Bytter bare id-en, ikke `medlemskapstatus` |
 | 5. Reserveløsningen i den nye appen | Laget i sp-medlemskap. Ikke i prod |
 | 6. Spleis spør den nye appen om resultatet | Laget bak toggle, på i dev |
+| 6b. Vis den nye appen i Speil uten å migrere | Laget i sp-medlemskap og Speil. Ikke i prod |
 | 7. Den nye appen gjør vurderingen | Laget i Spleis bak toggle, på i dev. Sender både `Medlemskap` og `Medlemskapsvurdering` |
 | 8. Migrer historikken | `PersonAvstemmingRiver` finnes, men er kommentert ut i `App.kt` |
 | 9. Id-en i godkjenningsbehovet | Ikke startet |
@@ -613,6 +632,28 @@ Varslene er flyttet bak den samme togglen. `ok` er ikke nok til å velge varsel,
 
 Varslene kommer derfor bare én gang, og de følger statusen beregningen faktisk bruker.
 
+### 6b. Vis den nye appen i Speil uten å migrere
+
+sp-medlemskap har to brytere. Begge er av som standard og står som `"true"` i `.nais/sp-medlemskap.dev-gcp.yaml`:
+
+- `MIGRER_VED_OPPSLAG` styrer om `GET .../vilkarsvurderinger` og `GET .../medlemskapsvurderinger/historikk` migrerer personen. Når den er av, svarer endepunktene med det som er lagret, og henter resten fra Spleis-API-et uten å lagre det. Ukjent id gir 404, og feil fra Spleis gir 503.
+- `OVERSTYRING_AV_MEDLEMSKAP` styrer om manuell vurdering og ny automatisk vurdering er lov. Når den er av, svarer endepunktene med 409 og feilkoden `OverstyringErSkruddAv`.
+
+Testene ligger i `OppslagUtenMigreringTest`, `OverstyringSkruddAvTest` og `AppKonfigurasjonTest`.
+
+I Speil:
+
+- `sp-medlemskap` er lagt til i `deploy/prod.yml`, og backenden er ikke lenger bare for dev.
+- Togglen «Ny medlemskapsvisning» finnes i toggle-menyen også i prod. Menyen vises bare for utviklere, og i prod nullstilles togglen når siden lastes på nytt.
+- Knappen «Vurder vilkår» vises bare når `useKanOverstyreMedlemskap` er sann. Den er bare sann i dev.
+
+Før steget skrus på i prod:
+
+- Steg 3 må være ferdig, slik at Speil har `medlemskapsvurderingId`.
+- sp-medlemskap må være deployet i prod med tilgang til spleis-api (steg 5). Speil-oppsettet i `deploy/prod.yml` forutsetter at appen kjører.
+
+Steg 7 slår på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod, når steg 4 også er i prod. Steg 8 slår på `MIGRER_VED_OPPSLAG`.
+
 ### 7. Den nye appen gjør vurderingen
 
 Behovet heter `Medlemskapsvurdering` og sendes ved vilkårsprøving, bak toggle.
@@ -638,6 +679,8 @@ Her skiller medlemskap seg fra opptjening. For opptjening regnet Spleis fortsatt
 ### 8. Migrer historikken
 
 Slå på `PersonAvstemmingRiver` i dev, så i prod. Følg med på volumet og antall replikaer.
+
+Slå også på `MIGRER_VED_OPPSLAG` i prod (se [steg 6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
 
 ### 9. Id-en i godkjenningsbehovet
 

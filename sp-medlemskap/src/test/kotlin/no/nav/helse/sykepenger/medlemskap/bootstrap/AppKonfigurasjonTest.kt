@@ -24,4 +24,22 @@ class AppKonfigurasjonTest {
         assertEquals("jdbc:postgresql://localhost:5432/mydb", konfigurasjon.database.jdbcUrl)
         assertEquals(false, konfigurasjon.openApi.eksponerOpenApi)
     }
+
+    @Test
+    fun `migrering ved oppslag og overstyring er av med mindre de er skrudd på`() {
+        val konfigurasjon = AppKonfigurasjon.fraEnv("sp-medlemskap", fullEnv)
+        assertEquals(false, konfigurasjon.migrerVedOppslag)
+        assertEquals(false, konfigurasjon.overstyringErSkruddPå)
+    }
+
+    @Test
+    fun `migrering ved oppslag og overstyring kan skrus på`() {
+        val konfigurasjon =
+            AppKonfigurasjon.fraEnv(
+                "sp-medlemskap",
+                fullEnv + mapOf("MIGRER_VED_OPPSLAG" to "true", "OVERSTYRING_AV_MEDLEMSKAP" to "true"),
+            )
+        assertEquals(true, konfigurasjon.migrerVedOppslag)
+        assertEquals(true, konfigurasjon.overstyringErSkruddPå)
+    }
 }

@@ -8,4 +8,5 @@ internal enum class ApiManuellVilkårsvurderingFeil(
 ) : ApiErrorCode {
     PersonIkkeFunnet(404, "Person ikke funnet"),
     ManglerTilgang(403, "Mangler tilgang"),
+    OverstyringErSkruddAv(409, "Overstyring av medlemskap er ikke skrudd på"),
 }

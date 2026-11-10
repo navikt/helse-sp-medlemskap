@@ -64,6 +64,17 @@ data class AppKonfigurasjon(
      * ISO 8601-format, for eksempel `PT5M`.
      */
     val forhåndsvurderingVentetid: Duration? = null,
+    /**
+     * Om oppslag fra Speil lagrer personens vurderinger fra Spleis (migrering ved oppslag). Er den av,
+     * leses vurderingene fra Spleis uten å lagres. Settes med `MIGRER_VED_OPPSLAG=true`, og skal ikke
+     * skrus på i prod før sp-medlemskap gjør vurderingen selv.
+     */
+    val migrerVedOppslag: Boolean = false,
+    /**
+     * Om saksbehandler kan vurdere medlemskap manuelt eller be om en ny automatisk vurdering. Settes med
+     * `OVERSTYRING_AV_MEDLEMSKAP=true`, og skal ikke skrus på i prod før sp-medlemskap gjør vurderingen selv.
+     */
+    val overstyringErSkruddPå: Boolean = false,
 ) {
     companion object {
         fun fraEnv(
@@ -77,6 +88,8 @@ data class AppKonfigurasjon(
             tilganger = TilgangsgrupperTilTilganger.fraEnv(env),
             openApi = OpenApiConfig.fraEnv(appNavn, env),
             forhåndsvurderingVentetid = env["FORHANDSVURDERING_VENTETID"]?.let(Duration::parse),
+            migrerVedOppslag = env["MIGRER_VED_OPPSLAG"].toBoolean(),
+            overstyringErSkruddPå = env["OVERSTYRING_AV_MEDLEMSKAP"].toBoolean(),
         )
     }
 }
@@ -195,7 +208,17 @@ private fun Application.ktorApp(
         tilgangsgrupperTilTilganger = konfigurasjon.tilganger,
     )
     configureOpenApiPlugin(konfigurasjon.openApi)
-    configureRestRuting(restAdapter, endepunkter(spleisClient, transaksjonProvider, publiser, versjonAvKode))
+    configureRestRuting(
+        restAdapter,
+        endepunkter(
+            spleisClient = spleisClient,
+            transaksjonProvider = transaksjonProvider,
+            publiser = publiser,
+            migrerVedOppslag = konfigurasjon.migrerVedOppslag,
+            overstyringErSkruddPå = konfigurasjon.overstyringErSkruddPå,
+            versjonAvKode = versjonAvKode,
+        ),
+    )
     monitor.subscribe(ApplicationStarted) {
         loggInfo("Ktor-applikasjon startet", "appNavn" to konfigurasjon.appNavn)
     }
@@ -209,13 +232,16 @@ internal fun endepunkter(
     spleisClient: ISpleisClient,
     transaksjonProvider: TransaksjonProvider<Transaksjonskontekst>,
     publiser: (key: String, melding: String) -> Unit,
+    migrerVedOppslag: Boolean,
+    overstyringErSkruddPå: Boolean,
     versjonAvKode: String = "test",
 ): RestRuting<Transaksjonskontekst>.() -> Unit =
     {
-        get(GetVilkårsvurderingerForPersonBehandler(PersonAvstemmingService(transaksjonProvider, spleisClient)))
-        get(GetMedlemskapshistorikkBehandler(PersonAvstemmingService(transaksjonProvider, spleisClient)))
+        val avstemmingService = PersonAvstemmingService(transaksjonProvider, spleisClient)
+        get(GetVilkårsvurderingerForPersonBehandler(avstemmingService, migrerVedOppslag))
+        get(GetMedlemskapshistorikkBehandler(avstemmingService, migrerVedOppslag))
         get(GetSaksbehandlerhandlingVisningBehandler())
 
-        post(PostManuellVilkårsvurderingBehandler())
-        post(PostNyAutomatiskVilkårsvurderingBehandler(publiser, versjonAvKode))
+        post(PostManuellVilkårsvurderingBehandler(overstyringErSkruddPå))
+        post(PostNyAutomatiskVilkårsvurderingBehandler(publiser, versjonAvKode, overstyringErSkruddPå))
     }

@@ -10,4 +10,5 @@ internal enum class ApiNyAutomatiskVilkårsvurderingFeil(
     ManglerTilgang(403, "Mangler tilgang"),
     MedlemskapsvurderingIkkeFunnet(404, "Fant ingen medlemskapsvurdering å vurdere på nytt"),
     MedlemskapsprøvingPågår(409, "Medlemskapsprøving pågår allerede"),
+    OverstyringErSkruddAv(409, "Overstyring av medlemskap er ikke skrudd på"),
 }

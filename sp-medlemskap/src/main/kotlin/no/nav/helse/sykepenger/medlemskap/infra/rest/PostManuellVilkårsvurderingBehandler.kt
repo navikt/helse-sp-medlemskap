@@ -13,8 +13,13 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.PostBehandler
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestResponse
 import java.time.Instant
 
-internal class PostManuellVilkårsvurderingBehandler :
-    PostBehandler<
+/**
+ * Er [overstyringErSkruddPå] av, avvises kallet. Overstyring skal ikke skrus på før sp-medlemskap gjør
+ * vurderingen selv, siden en manuell vurdering gjør sp-medlemskap til eier av vurderingen.
+ */
+internal class PostManuellVilkårsvurderingBehandler(
+    private val overstyringErSkruddPå: Boolean = true,
+) : PostBehandler<
         ApiManuellVilkårsvurderingResource,
         ApiManuellVilkårsvurderingRequest,
         ApiManuellVilkårsvurderingResponse,
@@ -29,6 +34,8 @@ internal class PostManuellVilkårsvurderingBehandler :
         request: ApiManuellVilkårsvurderingRequest,
         kallKontekst: KallKontekst<Transaksjonskontekst>,
     ): RestResponse<ApiManuellVilkårsvurderingResponse, ApiManuellVilkårsvurderingFeil> {
+        if (!overstyringErSkruddPå) return RestResponse.feil(ApiManuellVilkårsvurderingFeil.OverstyringErSkruddAv)
+
         val personPseudoId =
             PersonPseudoId.fraString(resource.personId)
                 ?: return RestResponse.feil(ApiManuellVilkårsvurderingFeil.PersonIkkeFunnet)
