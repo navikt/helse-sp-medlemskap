@@ -10,7 +10,7 @@ mockk = "1.14.11"
 smiley4-ktor-openapi-tools = "5.7.0"
 smiley4-schema-kenerator = "2.7.2"
 tbd-libs = "20261029.1843"
-rapidsAndRivers = "2026091610031789545782"
+rapidsAndRivers = "2026110308421793691732"
 sykepengerGradlePlugins = "20261029.1945"
 testcontainers = "2.0.5"
 
