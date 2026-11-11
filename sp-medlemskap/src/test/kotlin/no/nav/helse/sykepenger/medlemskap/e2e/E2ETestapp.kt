@@ -12,13 +12,11 @@ import no.nav.helse.sykepenger.medlemskap.application.PersonAvstemmingService
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.infra.db.Database
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForAutomatiskMedlemskapsvurderingRiver
-import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForNyMedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingResultatRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.OutboxPubliseringsjobb
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetVilkårsvurderingerForPersonBehandler
 import no.nav.helse.sykepenger.medlemskap.infra.rest.PostManuellVilkårsvurderingBehandler
-import no.nav.helse.sykepenger.medlemskap.infra.rest.PostNyAutomatiskVilkårsvurderingBehandler
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.leaderelection.LeaderElection
@@ -65,7 +63,6 @@ internal class E2ETestapp(
             }
             MedlemskapsvurderingRiver(this, transaksjon)
             GrunnlagForAutomatiskMedlemskapsvurderingRiver(this, transaksjon)
-            GrunnlagForNyMedlemskapsvurderingRiver(this, transaksjon)
             MedlemskapsvurderingResultatRiver(this, transaksjon, spleisClient)
         }
 
@@ -118,7 +115,6 @@ internal class E2ETestapp(
         routing {
             get(GetVilkårsvurderingerForPersonBehandler(PersonAvstemmingService(transaksjon, spleisClient)), restAdapter)
             post(PostManuellVilkårsvurderingBehandler(), restAdapter)
-            post(PostNyAutomatiskVilkårsvurderingBehandler(publiser = { key, melding -> rapid.publish(key, melding) }), restAdapter)
         }
     }
 

@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 internal class MedlemskapsvurderingRiverTest : DatabaseTest() {
@@ -50,7 +49,6 @@ internal class MedlemskapsvurderingRiverTest : DatabaseTest() {
                 .single()
                 .asString(),
         )
-        assertFalse(behov.has("saksbehandlerIdent"))
 
         assertEquals(Grunnlagsbehov.Medlemskap, prøving.uteståendeBehov)
         assertEquals(1.februar til 28.februar, prøving.oppslagsperiode)

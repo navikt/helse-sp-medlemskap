@@ -52,7 +52,6 @@ internal sealed interface OutboxMelding {
 
 enum class HandlingType {
     MANUELT_VURDERT_MEDLEMSKAP,
-    NY_AUTOMATISK_MEDLEMSKAPSVURDERING, // NB !!!! Denne må ev. også inn i Spesialist:
 }
 
 internal interface Outbox {

@@ -4,7 +4,6 @@ import no.nav.helse.februar
 import no.nav.helse.januar
 import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService.BehandleGrunnlagResultat
 import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService.BehandleVentendeBehovResultat
-import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService.VurderMedlemskapPåNyttResultat
 import no.nav.helse.sykepenger.medlemskap.application.VurderMedlemskapResultat.HarVurdering
 import no.nav.helse.sykepenger.medlemskap.application.VurderMedlemskapResultat.TrengerMedlemskapsopplysninger
 import no.nav.helse.sykepenger.medlemskap.domain.Grunnlagsbehov
@@ -22,7 +21,6 @@ import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 internal class MedlemskapServiceTest : DatabaseTest() {
@@ -109,68 +107,6 @@ internal class MedlemskapServiceTest : DatabaseTest() {
 
         assertEquals(BehandleGrunnlagResultat.IngenPrøvingFunnet, resultat)
         assertEquals(0, Lagret.antallVurderinger())
-    }
-
-    @Test
-    fun `ny vurdering krever en eksisterende vurdering`() {
-        assertEquals(VurderMedlemskapPåNyttResultat.IngenVurderingFunnet, service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
-    }
-
-    @Test
-    fun `ny vurdering kan ikke startes mens en prøving pågår`() {
-        fullførtPrøving(Medlemskapsstatus.Ja)
-        service { it.vurderMedlemskapPåNytt(FNR, 1.februar) }
-
-        assertEquals(VurderMedlemskapPåNyttResultat.PrøvingPågår, service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
-    }
-
-    @Test
-    fun `ny vurdering spør om samme periode som forrige prøving`() {
-        fullførtPrøving(Medlemskapsstatus.Ja)
-
-        val resultat = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
-
-        assertEquals(oppslagsperiode, resultat.oppslagsperiode)
-        assertEquals(2, Lagret.prøvinger().size)
-    }
-
-    @Test
-    fun `ny vurdering av manuell vurdering spør om skjæringstidspunktet`() {
-        transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.lagre(Medlemskapsvurdering.avSaksbehandler(FNR, 1.februar, Medlemskapsstatus.Nei, "A123456", "Begrunnelse")) }
-
-        val resultat = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
-
-        assertEquals(1.februar til 1.februar, resultat.oppslagsperiode)
-    }
-
-    @Test
-    fun `svar på ny vurdering lagrer vurderingen og melder fra via outbox`() {
-        val forrige = fullførtPrøving(Medlemskapsstatus.Nei)
-        val venter = assertIs<VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(service { it.vurderMedlemskapPåNytt(FNR, 1.februar) })
-
-        val resultat =
-            service {
-                it.behandleGrunnlagForNyMedlemskapsvurdering(
-                    svar = Medlemskapsstatus.Ja,
-                    fødselsnummer = FNR,
-                    skjæringstidspunkt = 1.februar,
-                    medlemskapsprøvingId = venter.medlemskapsprøvingId,
-                    saksbehandlerIdent = "A123456",
-                )
-            }
-
-        val ny = assertIs<BehandleGrunnlagResultat.NyVurderingForetatt>(resultat)
-        assertNotEquals(forrige, ny.medlemskapsvurderingId)
-        assertEquals(ny.medlemskapsvurderingId, transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.gjeldende(FNR, 1.februar) }!!.id)
-
-        val meldinger = Lagret.upubliserteMeldinger().map { it.melding }
-        val handling = meldinger.filterIsInstance<OutboxMelding.Saksbehandlerhandling>().single()
-        assertEquals(HandlingType.NY_AUTOMATISK_MEDLEMSKAPSVURDERING, handling.handlingType)
-        assertEquals("A123456", handling.saksbehandlerIdent)
-        assertEquals(ny.medlemskapsvurderingId.value, handling.handlingId)
-        assertFalse(handling.kreverTotrinnsvurdering)
-        val endret = meldinger.filterIsInstance<OutboxMelding.MedlemskapsvurderingEndret>().single()
-        assertEquals(OutboxMelding.MedlemskapsvurderingEndret(1.februar, ny.medlemskapsvurderingId.value, manuellVurdering = false), endret)
     }
 
     @Test

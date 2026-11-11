@@ -637,7 +637,7 @@ Varslene kommer derfor bare én gang, og de følger statusen beregningen faktisk
 sp-medlemskap har to brytere. Begge er av som standard og står som `"true"` i `.nais/sp-medlemskap.dev-gcp.yaml`:
 
 - `MIGRER_VED_OPPSLAG` styrer om `GET .../vilkarsvurderinger` og `GET .../medlemskapsvurderinger/historikk` migrerer personen. Når den er av, svarer endepunktene med det som er lagret, og henter resten fra Spleis-API-et uten å lagre det. Ukjent id gir 404, og feil fra Spleis gir 503.
-- `OVERSTYRING_AV_MEDLEMSKAP` styrer om manuell vurdering og ny automatisk vurdering er lov. Når den er av, svarer endepunktene med 409 og feilkoden `OverstyringErSkruddAv`.
+- `OVERSTYRING_AV_MEDLEMSKAP` styrer om manuell vurdering er lov. Når den er av, svarer endepunktet med 409 og feilkoden `OverstyringErSkruddAv`.
 
 Testene ligger i `OppslagUtenMigreringTest`, `OverstyringSkruddAvTest` og `AppKonfigurasjonTest`.
 

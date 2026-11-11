@@ -1,6 +1,5 @@
 package no.nav.helse.sykepenger.medlemskap.application
 
-import com.github.navikt.tbd_libs.personpseudoid.Identitetsnummer
 import no.nav.helse.Periode
 import no.nav.helse.sykepenger.medlemskap.application.VurderMedlemskapResultat.HarVurdering
 import no.nav.helse.sykepenger.medlemskap.application.VurderMedlemskapResultat.TrengerMedlemskapsopplysninger
@@ -10,10 +9,8 @@ import no.nav.helse.sykepenger.medlemskap.domain.Grunnlagsbehov
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsprøving
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsprøvingId
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
-import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Årsak
-import no.nav.helse.til
 import no.nav.sykepenger.libs.logging.MdcKey
 import no.nav.sykepenger.libs.logging.loggError
 import no.nav.sykepenger.libs.logging.loggInfo
@@ -28,7 +25,6 @@ internal class MedlemskapService(
 ) {
     private val medlemskapsvurderingRepository = kontekst.medlemskapsvurderinger
     private val medlemskapsprøvingRepository = kontekst.medlemskapsprøvinger
-    private val outbox = kontekst.outbox
     private val forhåndsvurderingRepository = kontekst.forhåndsvurderinger
     private val ventendeBehovRepository = kontekst.ventendeBehov
 
@@ -250,89 +246,6 @@ internal class MedlemskapService(
             BehandleGrunnlagResultat.NyVurderingForetatt(fødselsnummer, skjæringstidspunkt, vurdering.id)
         }
 
-    /**
-     * Starter en ny automatisk medlemskapsprøving for et skjæringstidspunkt som allerede er vurdert.
-     * Det er kallerens ansvar å be om medlemskapsopplysninger for prøvingen, og å ta med [saksbehandlerIdent]
-     * videre til [behandleGrunnlagForNyMedlemskapsvurdering], som melder saksbehandlerhandlingen til
-     * Spesialist og endringen til Spleis via outboxen når den nye vurderingen er klar.
-     *
-     * Medlemskapstjenesten spørres om samme periode som sist vi prøvde skjæringstidspunktet. Er
-     * skjæringstidspunktet aldri prøvd her (vurderingen er manuell eller overført fra Spleis/Infotrygd),
-     * spørres det om skjæringstidspunktet alene.
-     */
-    fun vurderMedlemskapPåNytt(
-        fødselsnummer: String,
-        skjæringstidspunkt: LocalDate,
-    ): VurderMedlemskapPåNyttResultat =
-        medMdc(
-            MdcKey.IDENTITETSNUMMER to fødselsnummer,
-        ) {
-            medlemskapsvurderingRepository.gjeldende(fødselsnummer, skjæringstidspunkt)
-                ?: return@medMdc VurderMedlemskapPåNyttResultat.IngenVurderingFunnet
-
-            val forrigePrøving = medlemskapsprøvingRepository.finnSiste(fødselsnummer, skjæringstidspunkt)
-            if (forrigePrøving != null && !forrigePrøving.erAvsluttet) {
-                loggInfo(
-                    "Kan ikke vurdere medlemskap på nytt, medlemskapsprøving pågår allerede",
-                    "medlemskapsprøvingId" to forrigePrøving.id.toString(),
-                    "skjæringstidspunkt" to skjæringstidspunkt.toString(),
-                )
-                return@medMdc VurderMedlemskapPåNyttResultat.PrøvingPågår
-            }
-
-            val oppslagsperiode = forrigePrøving?.oppslagsperiode ?: (skjæringstidspunkt til skjæringstidspunkt)
-            val prøving = Medlemskapsprøving.start(fødselsnummer, skjæringstidspunkt, oppslagsperiode)
-            medlemskapsprøvingRepository.lagre(prøving)
-            loggInfo(
-                "Startet ny medlemskapsprøving. Venter på medlemskapsopplysninger",
-                "medlemskapsprøvingId" to prøving.id.toString(),
-                "skjæringstidspunkt" to skjæringstidspunkt.toString(),
-            )
-            VurderMedlemskapPåNyttResultat.VenterPåGrunnlag(prøving.id, prøving.oppslagsperiode)
-        }
-
-    sealed class VurderMedlemskapPåNyttResultat {
-        data class VenterPåGrunnlag(
-            val medlemskapsprøvingId: MedlemskapsprøvingId,
-            val oppslagsperiode: Periode,
-        ) : VurderMedlemskapPåNyttResultat()
-
-        data object IngenVurderingFunnet : VurderMedlemskapPåNyttResultat()
-
-        data object PrøvingPågår : VurderMedlemskapPåNyttResultat()
-    }
-
-    fun behandleGrunnlagForNyMedlemskapsvurdering(
-        svar: Medlemskapsstatus,
-        fødselsnummer: String,
-        skjæringstidspunkt: LocalDate,
-        medlemskapsprøvingId: MedlemskapsprøvingId,
-        saksbehandlerIdent: String,
-        aarsaker: List<Årsak>? = null,
-    ): BehandleGrunnlagResultat =
-        medMdc(
-            MdcKey.IDENTITETSNUMMER to fødselsnummer,
-        ) {
-            val prøving =
-                medlemskapsprøvingRepository
-                    .finnSiste(fødselsnummer, skjæringstidspunkt)
-                    ?.takeIf { it.id == medlemskapsprøvingId }
-            avvisGrunnlag(prøving, medlemskapsprøvingId, skjæringstidspunkt)?.let { return@medMdc it }
-            checkNotNull(prøving)
-
-            val vurdering = prøving.motta(svar, versjonAvKode, aarsaker)
-            medlemskapsprøvingRepository.lagre(prøving)
-            lagreOgMeldNyVurdering(vurdering, saksbehandlerIdent)
-            loggInfo(
-                "Ny medlemskapsprøving fullført",
-                "medlemskapsprøvingId" to prøving.id.toString(),
-                "medlemskapsvurderingId" to vurdering.id.toString(),
-                "status" to vurdering.status.name,
-                "skjæringstidspunkt" to skjæringstidspunkt.toString(),
-            )
-            BehandleGrunnlagResultat.NyVurderingForetatt(fødselsnummer, skjæringstidspunkt, vurdering.id)
-        }
-
     /** Gir et resultat dersom grunnlaget ikke kan tas imot, ellers null. */
     private fun avvisGrunnlag(
         prøving: Medlemskapsprøving?,
@@ -367,38 +280,6 @@ internal class MedlemskapService(
     }
 
     private fun Medlemskapsprøving.trengerMedlemskapsopplysninger() = TrengerMedlemskapsopplysninger(fødselsnummer, skjæringstidspunkt, id, oppslagsperiode)
-
-    private fun lagreOgMeldNyVurdering(
-        vurdering: Medlemskapsvurdering,
-        saksbehandlerIdent: String,
-    ) {
-        medlemskapsvurderingRepository.lagre(vurdering)
-        outbox.leggTil(
-            OutboxKonvolutt.ny(
-                melding =
-                    OutboxMelding.Saksbehandlerhandling(
-                        skjæringstidspunkt = vurdering.skjæringstidspunkt,
-                        saksbehandlerIdent = saksbehandlerIdent,
-                        handlingId = vurdering.id.value,
-                        handlingType = HandlingType.NY_AUTOMATISK_MEDLEMSKAPSVURDERING,
-                        kreverTotrinnsvurdering = false,
-                        tidspunkt = Instant.now(),
-                    ),
-                identitetsnummer = Identitetsnummer(vurdering.fødselsnummer),
-            ),
-        )
-        outbox.leggTil(
-            OutboxKonvolutt.ny(
-                melding =
-                    OutboxMelding.MedlemskapsvurderingEndret(
-                        skjæringstidspunkt = vurdering.skjæringstidspunkt,
-                        medlemskapsvurderingId = vurdering.id.value,
-                        manuellVurdering = false,
-                    ),
-                identitetsnummer = Identitetsnummer(vurdering.fødselsnummer),
-            ),
-        )
-    }
 
     sealed class BehandleGrunnlagResultat {
         data class NyVurderingForetatt(

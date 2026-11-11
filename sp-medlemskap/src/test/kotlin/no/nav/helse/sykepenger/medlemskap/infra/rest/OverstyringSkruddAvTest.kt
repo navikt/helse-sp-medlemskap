@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test
 internal class OverstyringSkruddAvTest : DatabaseTest() {
     private val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
     private val pseudoId = pseudoIdProvider.nyPersonPseudoId(Identitetsnummer("12345678901"))
-    private val publiserteMeldinger = mutableListOf<String>()
 
     private object TillatAlt : PopulasjonstilgangskontrollProvider {
         override fun kontrollerKomplettTilgang(
@@ -75,13 +74,6 @@ internal class OverstyringSkruddAvTest : DatabaseTest() {
                     )
                 routing {
                     post(PostManuellVilkårsvurderingBehandler(overstyringErSkruddPå = false), restAdapter)
-                    post(
-                        PostNyAutomatiskVilkårsvurderingBehandler(
-                            publiser = { _, melding -> publiserteMeldinger.add(melding) },
-                            overstyringErSkruddPå = false,
-                        ),
-                        restAdapter,
-                    )
                 }
             }
             block()
@@ -108,18 +100,5 @@ internal class OverstyringSkruddAvTest : DatabaseTest() {
             assertEquals(HttpStatusCode.Conflict, response.status)
             assertEquals(0, Database.antallRader("medlemskapsvurdering"))
             assertEquals(0, Database.antallRader("outbox"))
-        }
-
-    @Test
-    fun `ny automatisk vurdering avvises og publiserer ingenting`() =
-        testApp {
-            val response =
-                client.post("/api/personer/$pseudoId/vilkarsvurderinger/automatisk") {
-                    contentType(ContentType.Application.Json)
-                    setBody("""{ "skjæringstidspunkt": "2024-02-01" }""")
-                }
-
-            assertEquals(HttpStatusCode.Conflict, response.status)
-            assertEquals(emptyList<String>(), publiserteMeldinger)
         }
 }

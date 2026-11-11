@@ -2,9 +2,6 @@ package no.nav.helse.sykepenger.medlemskap.infra.kafka
 
 import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.februar
-import no.nav.helse.sykepenger.medlemskap.application.HandlingType
-import no.nav.helse.sykepenger.medlemskap.application.MedlemskapService
-import no.nav.helse.sykepenger.medlemskap.application.OutboxMelding
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
 import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
@@ -22,7 +19,6 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 internal class GrunnlagForMedlemskapsvurderingRiverTest : DatabaseTest() {
     private val transaksjon = Database.transaksjonProvider
@@ -30,7 +26,6 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest : DatabaseTest() {
         TestRapid().apply {
             MedlemskapsvurderingRiver(this, transaksjon, "versjon")
             GrunnlagForAutomatiskMedlemskapsvurderingRiver(this, transaksjon, "versjon")
-            GrunnlagForNyMedlemskapsvurderingRiver(this, transaksjon, "versjon")
         }
 
     @ParameterizedTest
@@ -136,50 +131,5 @@ internal class GrunnlagForMedlemskapsvurderingRiverTest : DatabaseTest() {
 
         assertEquals(1, rapid.inspektør.size)
         assertEquals(0, Lagret.antallVurderinger())
-    }
-
-    @Test
-    fun `svar på ny vurdering bestilt av saksbehandler lagres og meldes via outbox`() {
-        rapid.sendTestMessage(medlemskapsvurderingBehov(1.februar, 1.februar, 28.februar))
-        rapid.sendTestMessage(løsMedlemskapsbehov(rapid.inspektør.message(0), "NEI"))
-        val venter =
-            assertIs<MedlemskapService.VurderMedlemskapPåNyttResultat.VenterPåGrunnlag>(
-                transaksjon.transaksjon { MedlemskapService(it).vurderMedlemskapPåNytt(FØDSELSNUMMER, 1.februar) },
-            )
-        val behov =
-            Medlemskapsbehov.nytt(
-                fødselsnummer = FØDSELSNUMMER,
-                vedtaksperiodeId = venter.medlemskapsprøvingId.toString(),
-                skjæringstidspunkt = 1.februar,
-                medlemskapsprøvingId = venter.medlemskapsprøvingId,
-                oppslagsperiode = venter.oppslagsperiode,
-                ekstra = mapOf("saksbehandlerIdent" to "A123456"),
-            )
-
-        rapid.sendTestMessage(
-            løsMedlemskapsbehov(
-                jacksonObjectMapper().readTree(behov.toJson()),
-                "JA",
-                """[{"regelId": "REGEL_1", "forklaringPaaUavklart": "Forklaring"}]""",
-            ),
-        )
-
-        assertEquals(2, rapid.inspektør.size, "Ny vurdering meldes via outbox, ikke direkte på rapid")
-        val gjeldende = transaksjon.transaksjon { tx -> tx.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar) }!!
-        assertEquals(Medlemskapsstatus.Ja, gjeldende.status)
-        assertEquals(listOf(Årsak("REGEL_1", "Forklaring")), assertIs<Vurderingskilde.Automatisk>(gjeldende.kilde).aarsaker)
-        val handling =
-            Lagret
-                .upubliserteMeldinger()
-                .map { it.melding }
-                .filterIsInstance<OutboxMelding.Saksbehandlerhandling>()
-                .single()
-        assertEquals(HandlingType.NY_AUTOMATISK_MEDLEMSKAPSVURDERING, handling.handlingType)
-        assertEquals("A123456", handling.saksbehandlerIdent)
-        assertTrue(
-            Lagret.upubliserteMeldinger().any {
-                it.melding == OutboxMelding.MedlemskapsvurderingEndret(1.februar, gjeldende.id.value, manuellVurdering = false)
-            },
-        )
     }
 }

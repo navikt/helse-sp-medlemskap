@@ -45,17 +45,15 @@ Funksjonen er av til `FORHANDSVURDERING_VENTETID` (ISO-8601, for eksempel `PT5M`
 |---|---|
 | `GET /api/personer/{personId}/vilkarsvurderinger?medlemskapsvurderingId=` | Henter en vurdering med kilde |
 | `POST /api/personer/{personId}/vilkarsvurderinger/manuell` | Manuell vurdering: `{ skjæringstidspunkt, status: JA\|NEI, fritekstbegrunnelse, journalpostId }` |
-| `POST /api/personer/{personId}/vilkarsvurderinger/automatisk` | Slår opp medlemskap på nytt for et skjæringstidspunkt |
 | `GET /api/personer/{personId}/medlemskapsvurderinger/historikk` | Historikk over vurderinger |
 | `GET /api/personer/{personId}/saksbehandlerhandlinger/{handlingId}/visning` | Visning av en saksbehandlerhandling |
 
-Når en vurdering endres, publiserer appen gjennom outboxen først en `saksbehandlerhandling` (`MANUELT_VURDERT_MEDLEMSKAP` eller `NY_AUTOMATISK_MEDLEMSKAPSVURDERING`) og deretter `endret_medlemskapsvurdering`.
+Når saksbehandler vurderer manuelt, publiserer appen gjennom outboxen først en `saksbehandlerhandling` (`MANUELT_VURDERT_MEDLEMSKAP`) og deretter `endret_medlemskapsvurdering`.
 
 ## Antakelser og avhengigheter
 
 - **Spleis-endepunkt:** Appen kaller `POST /api/medlemskapsvurderinger` i Spleis for å hente eldre vurderinger. Endepunktet finnes ikke ennå. Kontrakten vi antar er `{ medlemskapsvurderinger: [{ medlemskapsvurderingId, opprettet, skjæringstidspunkt, kilde: SPLEIS|INFOTRYGD, medlemskapstatus?: JA|NEI|VET_IKKE|UAVKLART_MED_BRUKERSPORSMAAL }] }`.
 - **Infotrygd:** Vurderinger fra Infotrygd regnes som `JA`.
-- **vedtaksperiodeId:** sparkel-medlemskap krever `vedtaksperiodeId`. Når saksbehandler ber om en ny automatisk vurdering, finnes det ingen vedtaksperiode, så appen sender medlemskapsprøvingens id i stedet.
 - **Forhåndsvurderinger:** Appen trenger lesetilgang til `medlemskap.medlemskapsvurderinger` fra team medlemskap. Medlemskapstjenesten har ennå ikke datoene i meldingen. Flytter Spleis skjæringstidspunktet utenfor perioden, kommer det ingen forhåndsvurdering som passer, og appen spør medlemskapstjenesten direkte når fristen går ut. Forhåndsvurderinger uten datoene lagres, men brukes aldri. Meldinger med bare én av datoene, eller med fom etter tom, avvises.
 - **Spleis må endres** for å sende `Medlemskapsvurdering` og `MedlemskapsvurderingResultat` i stedet for å slå opp `Medlemskap` selv. Den endringen er ikke gjort.
 
