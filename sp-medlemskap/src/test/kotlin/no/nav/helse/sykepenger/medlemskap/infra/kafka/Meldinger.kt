@@ -1,5 +1,6 @@
 package no.nav.helse.sykepenger.medlemskap.infra.kafka
 
+import com.github.navikt.tbd_libs.rapids_and_rivers.test_support.TestRapid
 import no.nav.helse.Periode
 import org.intellij.lang.annotations.Language
 import tools.jackson.databind.JsonNode
@@ -38,6 +39,11 @@ internal fun medlemskapsvurderingBehov(
       }
     }
     """
+
+/** Sender meldingen på topicet der medlemskapstjenesten sender forhåndsvurderinger. */
+internal fun TestRapid.sendForhåndsvurdering(
+    @Language("JSON") melding: String,
+) = sendTestMessage(melding, "nøkkel", ForhåndsvurderingRiver.TOPIC)
 
 /**
  * Slik medlemskapstjenesten sender en forhåndsvurdering av en søknad på `medlemskap.medlemskapsvurderinger`.

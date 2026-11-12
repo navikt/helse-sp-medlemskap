@@ -26,7 +26,7 @@ internal class ForhåndsvurderingRiverTest : DatabaseTest() {
     fun `lagrer forhåndsvurdering med årsaker`() {
         val søknadId = UUID.randomUUID()
 
-        rapid.sendTestMessage(
+        rapid.sendForhåndsvurdering(
             forhåndsvurderingMelding(
                 søknadId = søknadId,
                 gyldigFor = 1.januar til 31.januar,
@@ -46,7 +46,7 @@ internal class ForhåndsvurderingRiverTest : DatabaseTest() {
 
     @Test
     fun `lagrer forhåndsvurdering uten årsaker`() {
-        rapid.sendTestMessage("""{"soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA"}""")
+        rapid.sendForhåndsvurdering("""{"soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA"}""")
 
         val lagret = Lagret.forhåndsvurderinger().single()
         assertEquals(Medlemskapsstatus.Ja, lagret.status)
@@ -56,20 +56,31 @@ internal class ForhåndsvurderingRiverTest : DatabaseTest() {
 
     @Test
     fun `ignorerer ugyldige meldinger og meldinger fra rapiden`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId = "ikke-en-uuid", gyldigFor = 1.februar til 28.februar))
-        rapid.sendTestMessage(forhåndsvurderingMelding(gyldigFor = 1.februar til 28.februar, speilSvar = "KANSKJE"))
-        rapid.sendTestMessage("""{"@event_name":"noe","soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA"}""")
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId = "ikke-en-uuid", gyldigFor = 1.februar til 28.februar))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(gyldigFor = 1.februar til 28.februar, speilSvar = "KANSKJE"))
+        rapid.sendTestMessage(
+            """{"@event_name":"noe","soknadId":"${UUID.randomUUID()}","fnr":"$FØDSELSNUMMER","speilSvar":"JA"}""",
+            "nøkkel",
+            rapid.rapidName(),
+        )
+
+        assertTrue(Lagret.forhåndsvurderinger().isEmpty())
+    }
+
+    @Test
+    fun `ignorerer forhåndsvurderinger fra topics riveren ikke har valgt`() {
+        rapid.sendTestMessage(forhåndsvurderingMelding(gyldigFor = 1.februar til 28.februar), "nøkkel", "annet.topic")
 
         assertTrue(Lagret.forhåndsvurderinger().isEmpty())
     }
 
     @Test
     fun `ignorerer meldinger med ugyldig periode`() {
-        rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktFom":"i går","gyldigForSkjaeringstidspunktTom":"2018-02-28""""))
-        rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-01","gyldigForSkjaeringstidspunktTom":"i morgen""""))
-        rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-01""""))
-        rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktTom":"2018-02-28""""))
-        rapid.sendTestMessage(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-28","gyldigForSkjaeringstidspunktTom":"2018-02-01""""))
+        rapid.sendForhåndsvurdering(melding(""""gyldigForSkjaeringstidspunktFom":"i går","gyldigForSkjaeringstidspunktTom":"2018-02-28""""))
+        rapid.sendForhåndsvurdering(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-01","gyldigForSkjaeringstidspunktTom":"i morgen""""))
+        rapid.sendForhåndsvurdering(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-01""""))
+        rapid.sendForhåndsvurdering(melding(""""gyldigForSkjaeringstidspunktTom":"2018-02-28""""))
+        rapid.sendForhåndsvurdering(melding(""""gyldigForSkjaeringstidspunktFom":"2018-02-28","gyldigForSkjaeringstidspunktTom":"2018-02-01""""))
 
         assertTrue(Lagret.forhåndsvurderinger().isEmpty())
     }

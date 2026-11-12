@@ -55,7 +55,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
         jobb.kjørEnRunde()
         assertEquals(0, rapid.inspektør.size)
 
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
         jobb.kjørEnRunde()
 
         assertEquals(1, rapid.inspektør.size)
@@ -80,7 +80,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `bruker forhåndsvurdering som allerede er mottatt`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "NEI"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "NEI"))
 
         rapid.sendTestMessage(behov())
 
@@ -103,7 +103,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
     fun `bruker forhåndsvurderingen av første søknad når den første perioden ble avsluttet uten utbetaling`() {
         // Søknad 1 (1.-14. februar) er innenfor arbeidsgiverperioden. Det er den medlemskapstjenesten
         // forhåndsvurderer, men Spleis vilkårsprøver først når søknad 2 (15.-28. februar) kommer.
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
         klokke.flytt(Duration.ofDays(14))
 
         rapid.sendTestMessage(medlemskapsvurderingBehov(skjæringstidspunkt, 15.februar, 28.februar))
@@ -115,7 +115,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `bruker forhåndsvurdering når skjæringstidspunktet er innenfor perioden vurderingen gjelder for`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, 16.januar til 16.februar, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, 16.januar til 16.februar, "JA"))
 
         rapid.sendTestMessage(behov())
 
@@ -126,7 +126,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `venter når skjæringstidspunktet er utenfor perioden vurderingen gjelder for`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, 1.januar til 31.januar, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, 1.januar til 31.januar, "JA"))
 
         rapid.sendTestMessage(behov())
 
@@ -137,8 +137,8 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
     @Test
     fun `bruker den sist mottatte forhåndsvurderingen for skjæringstidspunktet`() {
         val sisteSøknadId = UUID.randomUUID()
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "UAVKLART_MED_BRUKERSPORSMAAL"))
-        rapid.sendTestMessage(forhåndsvurderingMelding(sisteSøknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "UAVKLART_MED_BRUKERSPORSMAAL"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(sisteSøknadId, gyldigFor, "JA"))
 
         rapid.sendTestMessage(behov())
 
@@ -149,8 +149,8 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `peker på den forhåndsvurderingen som ble brukt når samme søknad er forhåndsvurdert flere ganger`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "UAVKLART_MED_BRUKERSPORSMAAL"))
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "UAVKLART_MED_BRUKERSPORSMAAL"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
 
         rapid.sendTestMessage(behov())
 
@@ -163,9 +163,9 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `bruker ikke forhåndsvurdering for et annet skjæringstidspunkt eller en annen person`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, 2.februar til 28.februar, "JA"))
-        rapid.sendTestMessage(forhåndsvurderingMelding(UUID.randomUUID(), gyldigFor, "JA", fødselsnummer = "01010112345"))
-        rapid.sendTestMessage(forhåndsvurderingMelding(UUID.randomUUID(), null, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, 2.februar til 28.februar, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(UUID.randomUUID(), gyldigFor, "JA", fødselsnummer = "01010112345"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(UUID.randomUUID(), null, "JA"))
 
         rapid.sendTestMessage(behov())
         jobb.kjørEnRunde()
@@ -204,7 +204,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
         assertTrue(Lagret.ventendeBehov().isEmpty())
 
         // En forhåndsvurdering som kommer for sent, brukes ikke
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
         jobb.kjørEnRunde()
         assertEquals(1, rapid.inspektør.size)
 
@@ -231,7 +231,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `nytt behov etter at vurderingen er gjort, gir samme vurdering`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
         rapid.sendTestMessage(behov())
         rapid.sendTestMessage(behov())
 
@@ -254,7 +254,7 @@ internal class VentPåForhåndsvurderingTest : DatabaseTest() {
 
     @Test
     fun `spør direkte når behovet ikke gjelder en arbeidstaker`() {
-        rapid.sendTestMessage(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
+        rapid.sendForhåndsvurdering(forhåndsvurderingMelding(søknadId, gyldigFor, "JA"))
 
         rapid.sendTestMessage(behov(yrkesaktivitetstype = "SELVSTENDIG"))
 

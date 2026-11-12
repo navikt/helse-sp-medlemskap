@@ -12,6 +12,7 @@ import no.nav.helse.Periode
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.domain.Forhåndsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.ForhåndsvurderingId
+import no.nav.helse.sykepenger.medlemskap.rammeverk.rapids.godtaEkstraTopics
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.helse.til
 import no.nav.sykepenger.libs.logging.MdcKey
@@ -23,7 +24,8 @@ import java.time.Instant
 
 /**
  * Lagrer forhåndsvurderingene medlemskapstjenesten (LovMe) sender på topicet
- * `medlemskap.medlemskapsvurderinger`. Topicet leses i tillegg til rapiden, via `KAFKA_EXTRA_TOPIC`.
+ * `medlemskap.medlemskapsvurderinger`. Topicet leses i tillegg til rapiden, via `KAFKA_EXTRA_TOPIC`,
+ * og riveren velger det med [godtaEkstraTopics].
  *
  * ```json
  * { "soknadId": "<søknadens eksterne id>", "fnr": "...", "speilSvar": "UAVKLART_MED_BRUKERSPORSMAAL",
@@ -42,7 +44,7 @@ internal class ForhåndsvurderingRiver(
     private val transaksjonProvider: TransaksjonProvider<Transaksjonskontekst>,
 ) : River.PacketListener {
     init {
-        River(rapidsConnection)
+        River(rapidsConnection.godtaEkstraTopics(TOPIC))
             .apply {
                 precondition {
                     it.forbid("@event_name")
@@ -98,12 +100,15 @@ internal class ForhåndsvurderingRiver(
         loggError("Ugyldig forhåndsvurdering fra medlemskapstjenesten", "feil" to problems.toString())
     }
 
-    private companion object {
-        const val GYLDIG_FOM = "gyldigForSkjaeringstidspunktFom"
-        const val GYLDIG_TOM = "gyldigForSkjaeringstidspunktTom"
+    companion object {
+        /** Topicet medlemskapstjenesten sender forhåndsvurderingene på. */
+        const val TOPIC = "medlemskap.medlemskapsvurderinger"
+
+        private const val GYLDIG_FOM = "gyldigForSkjaeringstidspunktFom"
+        private const val GYLDIG_TOM = "gyldigForSkjaeringstidspunktTom"
 
         /** Begge datoene eller ingen av dem. Kaster ved ugyldige datoer, så meldingen avvises. */
-        fun gyldigForSkjæringstidspunkt(packet: JsonMessage): Periode? {
+        private fun gyldigForSkjæringstidspunkt(packet: JsonMessage): Periode? {
             val fom = packet[GYLDIG_FOM].datoOrNull()
             val tom = packet[GYLDIG_TOM].datoOrNull()
             if (fom == null && tom == null) return null

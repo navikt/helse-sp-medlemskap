@@ -37,6 +37,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureCallLogging
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureContentNegotiation
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureResources
 import no.nav.helse.sykepenger.medlemskap.rammeverk.plugins.configureStatusPages
+import no.nav.helse.sykepenger.medlemskap.rammeverk.rapids.kunRapiden
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestAdapter
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestRuting
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
@@ -124,28 +125,30 @@ fun main() {
         })
         .apply {
             register(leaderElection)
+            // Rivers får bare meldinger fra rapiden, med mindre de selv velger et ekstra topic
+            val rapid = kunRapiden()
             GrunnlagForAutomatiskMedlemskapsvurderingRiver(
-                rapidsConnection = this,
+                rapidsConnection = rapid,
                 transaksjonProvider = transaksjonProvider,
                 versjonAvKode = versjonAvKode,
             )
             MedlemskapsvurderingRiver(
-                rapidsConnection = this,
+                rapidsConnection = rapid,
                 transaksjonProvider = transaksjonProvider,
                 versjonAvKode = versjonAvKode,
                 ventPåForhåndsvurdering = ventPåForhåndsvurdering,
             )
             ForhåndsvurderingRiver(
-                rapidsConnection = this,
+                rapidsConnection = rapid,
                 transaksjonProvider = transaksjonProvider,
             )
             MedlemskapsvurderingResultatRiver(
-                rapidsConnection = this,
+                rapidsConnection = rapid,
                 transaksjonProvider = transaksjonProvider,
                 spleisClient = spleisClient,
             )
 //            PersonAvstemmingRiver(
-//                rapidsConnection = this,
+//                rapidsConnection = rapid,
 //                personAvstemmingService =
 //                    PersonAvstemmingService(
 //                        transaksjonProvider = transaksjonProvider,
