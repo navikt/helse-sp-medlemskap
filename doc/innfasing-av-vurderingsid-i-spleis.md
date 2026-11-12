@@ -679,7 +679,7 @@ Med togglen på kan statusen på grunnlaget og id-en peke på ulike vurderinger.
 
 #### Forhåndsvurderinger fra LovMe
 
-sp-medlemskap gjør ikke alltid det samme oppslaget som Spleis. For arbeidstakere venter sp-medlemskap først på en forhåndsvurdering fra LovMe (`FORHANDSVURDERING_VENTETID`, nå `PT5M`). LovMe forhåndsvurderer førstegangssøknader og kan ta hensyn til svarene i søknaden. Kommer det ingen forhåndsvurdering innen fristen, slår sp-medlemskap opp i sparkel-medlemskap selv. Andre yrkesaktiviteter får oppslag med en gang.
+sp-medlemskap gjør ikke alltid det samme oppslaget som Spleis. For arbeidstakere venter sp-medlemskap først på en forhåndsvurdering fra LovMe (`FORHANDSVURDERING_VENTETID`, nå `PT2M`, altså 2 minutter). LovMe forhåndsvurderer førstegangssøknader og kan ta hensyn til svarene i søknaden. Kommer det ingen forhåndsvurdering innen fristen, slår sp-medlemskap opp i sparkel-medlemskap selv. Andre yrkesaktiviteter får oppslag med en gang.
 
 Svaret kan derfor være annerledes enn Spleis sitt synkrone oppslag. Vi forventer at forhåndsvurderingene oftere gir `JA`. Før kunne Spleis slå opp før LovMe hadde fått svarene i søknaden, og få `UAVKLART_MED_BRUKERSPORSMAAL`. Det er sp-medlemskap som skal gjelde. Vi lar derfor ikke Spleis vinne ved avvik, slik opptjening gjorde i sammenligningsuka.
 
@@ -708,7 +708,7 @@ Sammenligningen er midlertidig. Fjern den når vi vet nok om avvikene.
 #### Før steg 7 skrus på i prod
 
 - Gjør den nye visningen til standard i Speil (se [6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
-- Vurder å sette ned `FORHANDSVURDERING_VENTETID` i starten. sp-medlemskap har bare forhåndsvurderinger for søknader fra og med 12.11. De første ukene venter derfor de fleste arbeidstakere til fristen går ut.
+- `FORHANDSVURDERING_VENTETID` er satt ned fra `PT5M` til `PT2M` for starten. sp-medlemskap har bare forhåndsvurderinger for søknader fra og med 12.11. De første ukene venter derfor de fleste arbeidstakere til fristen går ut.
 - Avklar med LovMe at volumet er greit. Uten forhåndsvurdering slår både Spleis og sp-medlemskap opp i sparkel-medlemskap.
 - Sjekk alarmene for sp-medlemskap. Appen må svare både ved vilkårsprøving og ved beregning.
 

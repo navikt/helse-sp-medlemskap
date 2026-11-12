@@ -40,4 +40,4 @@ spec:
     - name: KAFKA_EXTRA_TOPIC
       value: medlemskap.medlemskapsvurderinger
     - name: FORHANDSVURDERING_VENTETID
-      value: PT5M
+      value: PT2M
