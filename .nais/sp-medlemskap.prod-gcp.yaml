@@ -37,3 +37,7 @@ spec:
     - name: TILGANG_LES
       # 0000-CA-Speil_Lesetilgang, tbd, speil-riksrevisjonen-lesetilgang
       value: c5f26254-c6fa-4942-b81b-5cdff847d3df,f787f900-6697-440d-a086-d5bb56e26a9c,54273224-e40a-4e3d-b3cb-2219603058f9
+    - name: KAFKA_EXTRA_TOPIC
+      value: medlemskap.medlemskapsvurderinger
+    - name: FORHANDSVURDERING_VENTETID
+      value: PT5M
