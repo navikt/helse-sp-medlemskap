@@ -8,13 +8,17 @@ import com.github.navikt.tbd_libs.rapids_and_rivers_api.RapidsConnection
 import io.micrometer.core.instrument.MeterRegistry
 import no.nav.helse.sykepenger.medlemskap.application.Transaksjonskontekst
 import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsstatus
+import no.nav.helse.sykepenger.medlemskap.domain.Medlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.domain.MedlemskapsvurderingId
+import no.nav.helse.sykepenger.medlemskap.domain.Vurderingskilde
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.ISpleisClient
+import no.nav.helse.sykepenger.medlemskap.infra.spleis.SpleisMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.infra.spleis.tilMedlemskapsvurdering
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.TransaksjonProvider
 import no.nav.sykepenger.libs.logging.MdcKey
 import no.nav.sykepenger.libs.logging.loggError
 import no.nav.sykepenger.libs.logging.loggInfo
+import no.nav.sykepenger.libs.logging.loggWarn
 import no.nav.sykepenger.libs.logging.medMdc
 
 /**
@@ -22,6 +26,10 @@ import no.nav.sykepenger.libs.logging.medMdc
  * Spleis spør om id-en på vilkårsgrunnlaget ved hver beregning, også for forlengelser. Slå derfor
  * alltid opp med id, aldri gjeldende vurdering for skjæringstidspunktet. En ny vurdering skal ha ny id
  * og sendes som endret_medlemskapsvurdering, slik at Spleis bytter id og revurderer.
+ *
+ * Når sp-medlemskap selv har gjort vurderingen, sammenligner riveren den med statusen Spleis har på
+ * vilkårsgrunnlaget, og logger om de er like eller ulike. Sammenligningen påvirker ikke svaret. Den er
+ * midlertidig, og bruker kallet mot Spleis som tidligere bare ble gjort når id-en var ukjent her.
  */
 internal open class MedlemskapsvurderingResultatRiver(
     rapidsConnection: RapidsConnection,
@@ -77,6 +85,8 @@ internal open class MedlemskapsvurderingResultatRiver(
                     "løsning" to packet.toJson(),
                 )
                 context.publish(packet.toJson())
+
+                medlemskapsvurdering?.let { sammenlignMedSpleis(fødselsnummer, it) }
             } catch (ex: Exception) {
                 loggError("Feil under håndtering av behov $behovnavn", ex, "medlemskapsvurderingId" to medlemskapsvurderingId.toString())
             }
@@ -92,6 +102,75 @@ internal open class MedlemskapsvurderingResultatRiver(
             .find { it.medlemskapsvurderingId == medlemskapsvurderingId }
             ?.tilMedlemskapsvurdering(fødselsnummer)
             ?.status
+
+    private fun sammenlignMedSpleis(
+        fødselsnummer: String,
+        vurdering: Medlemskapsvurdering,
+    ) {
+        val kilde = vurdering.kilde.tilSammenligningskilde() ?: return
+        val spleisstatus =
+            try {
+                spleisClient
+                    .hentMedlemskapsvurderinger(fødselsnummer = fødselsnummer)
+                    .find { it.medlemskapsvurderingId == vurdering.id }
+                    ?.status()
+            } catch (ex: Exception) {
+                loggWarn(
+                    "Klarte ikke sammenligne medlemskapsvurdering med Spleis",
+                    ex,
+                    "medlemskapsvurderingId" to vurdering.id.toString(),
+                )
+                return
+            }
+
+        val detaljer =
+            arrayOf(
+                "medlemskapsvurderingId" to vurdering.id.toString(),
+                "skjæringstidspunkt" to vurdering.skjæringstidspunkt.toString(),
+                "kilde" to kilde,
+                "statusSpMedlemskap" to vurdering.status.tilSvar(),
+                "statusSpleis" to spleisstatus?.tilSvar(),
+            )
+        when {
+            spleisstatus == null -> loggWarn("Fant ikke medlemskapsvurderingen i Spleis for sammenligning", *detaljer)
+            spleisstatus == vurdering.status -> loggInfo("Medlemskapsvurdering samsvarer med Spleis", *detaljer)
+            else ->
+                loggWarn(
+                    "Medlemskapsvurdering avviker fra Spleis",
+                    *detaljer,
+                    "retning" to retning(sp = vurdering.status, spleis = spleisstatus),
+                )
+        }
+    }
+
+    // Overførte vurderinger er Spleis sine egne, så de er det ingen vits i å sammenligne.
+    private fun Vurderingskilde.tilSammenligningskilde() =
+        when (this) {
+            is Vurderingskilde.Automatisk -> if (forhåndsvurdertSøknadId != null) "FORHANDSVURDERING" else "OPPSLAG"
+            is Vurderingskilde.Saksbehandler -> "SAKSBEHANDLER"
+            Vurderingskilde.OverførtFraSpleis, Vurderingskilde.OverførtFraInfotrygd -> null
+        }
+
+    private fun SpleisMedlemskapsvurdering.status() =
+        when (this) {
+            is SpleisMedlemskapsvurdering.Spleis -> status
+            is SpleisMedlemskapsvurdering.Infotrygd -> Medlemskapsstatus.Ja
+        }
+
+    // Rangert fra mest til minst positiv for bruker
+    private fun retning(
+        sp: Medlemskapsstatus,
+        spleis: Medlemskapsstatus,
+    ): String {
+        val rangering =
+            listOf(
+                Medlemskapsstatus.Ja,
+                Medlemskapsstatus.Uavklart,
+                Medlemskapsstatus.UavklartMedBrukerspørsmål,
+                Medlemskapsstatus.Nei,
+            )
+        return if (rangering.indexOf(sp) < rangering.indexOf(spleis)) "SP_MEDLEMSKAP_MER_POSITIV" else "SP_MEDLEMSKAP_MER_NEGATIV"
+    }
 
     // Samme verdier som sparkel-medlemskap svarer med, slik at Spleis kan tolke begge likt.
     private fun Medlemskapsstatus.tilSvar() =

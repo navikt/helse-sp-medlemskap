@@ -537,16 +537,16 @@ Status for hvert steg:
 
 | Steg | Status |
 |---|---|
-| 1. Bygg den nye appen | Stort sett gjort |
+| 1. Bygg den nye appen | Gjort. I prod |
 | 2. Id på alle vilkårsgrunnlag | Gjort ([`e19958c`](https://github.com/navikt/helse-spleis/commit/e19958c02c)) |
-| 3. Eksponer id-en og den gamle vurderingen | Endepunktet er laget. Spanner og Speil gjenstår |
-| 4. Kanal for endrede vurderinger | Laget i Spleis. Bytter bare id-en, ikke `medlemskapstatus` |
-| 5. Reserveløsningen i den nye appen | Laget i sp-medlemskap. Ikke i prod |
-| 6. Spleis spør den nye appen om resultatet | Laget bak toggle, på i dev |
-| 6b. Vis den nye appen i Speil uten å migrere | Laget i sp-medlemskap og Speil. Ikke i prod |
-| 7. Den nye appen gjør vurderingen | Laget i Spleis bak toggle, på i dev. Sender både `Medlemskap` og `Medlemskapsvurdering` |
-| 8. Migrer historikken | `PersonAvstemmingRiver` finnes, men er kommentert ut i `App.kt` |
-| 9. Id-en i godkjenningsbehovet | Ikke startet |
+| 3. Eksponer id-en og den gamle vurderingen | Endepunktet og id-en i Speil er i prod. Spanner gjenstår |
+| 4. Kanal for endrede vurderinger | I prod i Spleis. Bytter bare id-en, ikke `medlemskapstatus` |
+| 5. Reserveløsningen i den nye appen | I prod |
+| 6. Spleis spør den nye appen om resultatet | I prod siden 04.11. Togglen er fjernet. Reserveløsningen med statusen på grunnlaget finnes fortsatt |
+| 6b. Vis den nye appen i Speil uten å migrere | I prod bak togglen «Ny medlemskapsvisning», bare for utviklere. Neste steg er å gjøre den til standard |
+| 7. Den nye appen gjør vurderingen | På i dev. Ikke på i prod. sp-medlemskap tar imot forhåndsvurderinger fra LovMe i prod siden 12.11 |
+| 8. Migrer historikken | Ikke startet. `PersonAvstemmingRiver` er kommentert ut i `App.kt`, og `MIGRER_VED_OPPSLAG` er av i prod |
+| 9. Id-en i godkjenningsbehovet | Gjort ([`22aa079`](https://github.com/navikt/helse-spleis/commit/22aa079509)) |
 | 10. Rydd opp | Ikke startet |
 
 ### 1. Bygg den nye appen
@@ -590,7 +590,7 @@ Ny id i `kopierMed` blir først aktuelt i [steg 4](#4-kanal-for-endrede-vurderin
 - Lag `POST /api/medlemskapsvurderinger` i spleis-api med kontrakten sp-medlemskap venter: `{ medlemskapsvurderinger: [{ medlemskapsvurderingId, opprettet, skjæringstidspunkt, kilde: SPLEIS|INFOTRYGD, medlemskapstatus?: JA|NEI|VET_IKKE|UAVKLART_MED_BRUKERSPORSMAAL }] }`. Bruk logikken for `opprettet` fra [`d99ba29`](https://github.com/navikt/helse-spleis/commit/d99ba29dbf96d9f50439e1f00fc99b416edd99eb).
 - Gi sp-medlemskap tilgang inn til spleis-api i `.nais/spleis-api.yaml`.
 
-Endepunktet og tilgangen er laget i `sykepenger-api/.../spleis/medlemskap/MedlemskapApi.kt`, med tester i `MedlemskapsvurderingApiTest` og `MedlemskapsvurderingerTest`. Spanner og Speil gjenstår.
+Endepunktet og tilgangen er laget i `sykepenger-api/.../spleis/medlemskap/MedlemskapApi.kt`, med tester i `MedlemskapsvurderingApiTest` og `MedlemskapsvurderingerTest`. Speil får `medlemskapsvurderingId` på vilkårsgrunnlaget gjennom Spesialist. Spanner gjenstår.
 
 ### 4. Kanal for endrede vurderinger
 
@@ -623,7 +623,7 @@ Behovet heter `MedlemskapsvurderingResultat` og sendes ved beregning, bak toggle
 
 Etter dette steget kan Spleis ikke beregne uten svar fra sp-medlemskap.
 
-Behovet, lesingen av svaret og reserveløsningen er laget bak togglen `MEDLEMSKAPSVURDERINGRESULTATBEHOV`. Den står som `"false"` i `.nais/spleis.dev-gcp.yaml`. Når svaret er ulikt statusen på grunnlaget, skriver Spleis en info-melding i aktivitetsloggen. Testene ligger i `MedlemskapE2E`, `YtelserRiverMappingTest` og `BehovkontraktTest`.
+Behovet, lesingen av svaret og reserveløsningen ble laget bak togglen `MEDLEMSKAPSVURDERINGRESULTATBEHOV`. Togglen ble skrudd på i prod 04.11 ([`59a0e4a`](https://github.com/navikt/helse-spleis/commit/59a0e4a2b8)) og fjernet fra koden 05.11 ([`684512f`](https://github.com/navikt/helse-spleis/commit/684512f418)). Reserveløsningen er ikke fjernet: Mangler svaret, bruker `Vedtaksperiode.medlemskapstatus` fortsatt statusen på grunnlaget. Når svaret er ulikt statusen på grunnlaget, skriver Spleis en info-melding i aktivitetsloggen. Den kommer ikke i Team Logs, bare på rapiden som `aktivitetslogg_ny_aktivitet`. Testene ligger i `MedlemskapE2E`, `YtelserRiverMappingTest` og `BehovkontraktTest`.
 
 Varslene er flyttet bak den samme togglen. `ok` er ikke nok til å velge varsel, så Spleis leser hele `svar`:
 
@@ -656,6 +656,10 @@ Før steget skrus på i prod:
 
 Steg 7 slår på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod, når steg 4 også er i prod. Steg 8 slår på `MIGRER_VED_OPPSLAG`.
 
+Steget er i prod siden 10.11 ([`0bb81ad`](https://github.com/navikt/helse-speil/commit/0bb81ad27) i Speil og [`23efd40`](https://github.com/navikt/helse-sp-medlemskap/commit/23efd40) i sp-medlemskap).
+
+Neste steg er å gjøre den nye visningen til standard i Speil, før eller samtidig med at steg 7 skrus på i prod. Etter steg 7 bruker beregningen svaret fra sp-medlemskap, mens statusen på grunnlaget fortsatt kommer fra Spleis sitt eget oppslag. Den gamle visningen bruker statusen på grunnlaget og kan derfor vise et annet svar enn det beregningen faktisk bruker. Overstyringen er fortsatt bare i dev.
+
 ### 7. Den nye appen gjør vurderingen
 
 Behovet heter `Medlemskapsvurdering` og sendes ved vilkårsprøving, bak toggle.
@@ -664,7 +668,7 @@ Behovet heter `Medlemskapsvurdering` og sendes ved vilkårsprøving, bak toggle.
 - Behold `Medlemskap` så lenge statusen på grunnlaget trengs. sp-medlemskap svarer bare med `id`, men `medlemskapstatus` på grunnlaget er påkrevd og brukes av Speil, spleis-api og reserveløsningen i steg 6.
 - Gjør som [`d8558c8`](https://github.com/navikt/helse-spleis/commit/d8558c8dc7fdf4a16ccb5a703a975cbf652e508e) gjorde for opptjening: Legg til `medlemskapsvurderingId: UUID?` i `Vilkårsgrunnlag`, og bruk `medlemskapsvurderingId ?: UUID.randomUUID()`. Id-en må være nullable fordi togglen først er på i dev, og fordi et behov sendt før togglen ble slått på, kan få en løsning uten id. Feltet på grunnlaget er fortsatt påkrevd. Fjern reserveverdien når togglen er på i prod og alle gamle behov er besvart.
 
-Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`, som står som `"false"` i `.nais/spleis.dev-gcp.yaml`:
+Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`. Den er på i dev siden 22.10 ([`d1032cc`](https://github.com/navikt/helse-spleis/commit/d1032cc94e)), men ikke i prod:
 
 - `EventBusOversetter` sender `Medlemskapsvurdering` sammen med `Medlemskap` når togglen er på.
 - `VilkårsgrunnlagRiver` er `interestedIn` i `@løsning.Medlemskapsvurdering.id`. Behovet står ikke i riverens behovliste, så løsninger uten det nye behovet blir fortsatt plukket opp.
@@ -673,10 +677,40 @@ Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`, som står som 
 
 Med togglen på kan statusen på grunnlaget og id-en peke på ulike vurderinger. Statusen kommer fra et nytt oppslag i sparkel-medlemskap, mens sp-medlemskap gjenbruker den gjeldende vurderingen hvis den alt har en for skjæringstidspunktet. Når steg 6 er på, bruker beregningen svaret for id-en, og Spleis skriver en info-melding i aktivitetsloggen ved avvik. Speil og spleis-api viser fortsatt statusen på grunnlaget til steg 3 og Speil leser fra sp-medlemskap.
 
-Her skiller medlemskap seg fra opptjening. For opptjening regnet Spleis fortsatt ut svaret selv, så sammenligningen var gratis. For medlemskap betyr sammenligning at både Spleis og sp-medlemskap sender `Medlemskap` til sparkel-medlemskap, altså to oppslag mot LovMe for hver vilkårsprøving. Velg en av disse:
+#### Forhåndsvurderinger fra LovMe
 
-- Avklar med LovMe at dobbelt volum er greit i en periode, og sammenlign som i [steg 7](#steg-7-den-nye-appen-gjør-vurderingen). Spleis sender allerede begge behovene når togglen er på. Skal Spleis vinne ved avvik, må sammenligningen ligge i `MedlemskapsvurderingResultatRiver` i sp-medlemskap, slik [`a0329a9`](https://github.com/navikt/helse-sp-vilkarsproving/commit/a0329a91d199f415cbe3bf03f7b28a972853cdc9) gjorde for opptjening.
-- Hopp over sammenligningen. sp-medlemskap gjør det samme oppslaget som Spleis gjør i dag, så risikoen er mindre enn for opptjening, der vurderingslogikken var skrevet på nytt.
+sp-medlemskap gjør ikke alltid det samme oppslaget som Spleis. For arbeidstakere venter sp-medlemskap først på en forhåndsvurdering fra LovMe (`FORHANDSVURDERING_VENTETID`, nå `PT5M`). LovMe forhåndsvurderer førstegangssøknader og kan ta hensyn til svarene i søknaden. Kommer det ingen forhåndsvurdering innen fristen, slår sp-medlemskap opp i sparkel-medlemskap selv. Andre yrkesaktiviteter får oppslag med en gang.
+
+Svaret kan derfor være annerledes enn Spleis sitt synkrone oppslag. Vi forventer at forhåndsvurderingene oftere gir `JA`. Før kunne Spleis slå opp før LovMe hadde fått svarene i søknaden, og få `UAVKLART_MED_BRUKERSPORSMAAL`. Det er sp-medlemskap som skal gjelde. Vi lar derfor ikke Spleis vinne ved avvik, slik opptjening gjorde i sammenligningsuka.
+
+#### Sammenligningen med Spleis
+
+`MedlemskapsvurderingResultatRiver` sammenligner vurderinger sp-medlemskap har gjort selv med statusen Spleis har på grunnlaget. Sammenligningen påvirker ikke svaret:
+
+- Riveren svarer alltid med sin egen vurdering, og publiserer svaret før den sammenligner.
+- Vurderinger som er overført fra Spleis eller Infotrygd, sammenlignes ikke.
+- Sammenligningen bruker kallet mot spleis-api som før bare ble gjort når id-en var ukjent. Det blir derfor omtrent like mange kall som før steg 7.
+- Feiler kallet mot Spleis, logges en advarsel, og svaret er allerede sendt.
+
+Meldingene i loggen er:
+
+| Melding | Nivå |
+|---|---|
+| «Medlemskapsvurdering samsvarer med Spleis» | INFO |
+| «Medlemskapsvurdering avviker fra Spleis» | WARN |
+| «Fant ikke medlemskapsvurderingen i Spleis for sammenligning» | WARN |
+| «Klarte ikke sammenligne medlemskapsvurdering med Spleis» | WARN |
+
+I Team Logs har meldingene `identitetsnummer` fra MDC og detaljene `medlemskapsvurderingId`, `skjæringstidspunkt`, `kilde` (`FORHANDSVURDERING`, `OPPSLAG` eller `SAKSBEHANDLER`), `statusSpMedlemskap` og `statusSpleis`. Ved avvik står også `retning`, enten `SP_MEDLEMSKAP_MER_POSITIV` eller `SP_MEDLEMSKAP_MER_NEGATIV`. Retningen bygger på rekkefølgen `JA`, `UAVKLART`, `UAVKLART_MED_BRUKERSPORSMAAL`, `NEI`. Testene ligger i `MedlemskapsvurderingResultatRiverTest`.
+
+Sammenligningen er midlertidig. Fjern den når vi vet nok om avvikene.
+
+#### Før steg 7 skrus på i prod
+
+- Gjør den nye visningen til standard i Speil (se [6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
+- Vurder å sette ned `FORHANDSVURDERING_VENTETID` i starten. sp-medlemskap har bare forhåndsvurderinger for søknader fra og med 12.11. De første ukene venter derfor de fleste arbeidstakere til fristen går ut.
+- Avklar med LovMe at volumet er greit. Uten forhåndsvurdering slår både Spleis og sp-medlemskap opp i sparkel-medlemskap.
+- Sjekk alarmene for sp-medlemskap. Appen må svare både ved vilkårsprøving og ved beregning.
 
 #### Varsler når sp-medlemskap gjenbruker vurderingen
 
@@ -695,9 +729,11 @@ Slå på `PersonAvstemmingRiver` i dev, så i prod. Følg med på volumet og ant
 
 Slå også på `MIGRER_VED_OPPSLAG` i prod (se [steg 6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
 
+Migreringen haster ikke. Uten den henter Speil vurderingene fra Spleis-API-et via sp-medlemskap. Undersøk dette før migreringen skrus på: `MedlemskapService.vurderMedlemskap` gjenbruker den gjeldende vurderingen for skjæringstidspunktet, og etter migreringen kan den være overført fra Infotrygd (`JA`) eller fra Spleis. Vilkårsprøver Spleis et skjæringstidspunkt som tidligere hadde et Infotrygd-grunnlag, svarer sp-medlemskap da `JA` uten å slå opp i LovMe. Vurder å holde overførte vurderinger utenfor gjenbruken.
+
 ### 9. Id-en i godkjenningsbehovet
 
-Som i [steg 9](#steg-9-id-en-i-godkjenningsbehovet). Kan gjøres når som helst etter steg 2.
+Som i [steg 9](#steg-9-id-en-i-godkjenningsbehovet). Gjort i [`22aa079`](https://github.com/navikt/helse-spleis/commit/22aa079509).
 
 ### 10. Rydd opp
 
