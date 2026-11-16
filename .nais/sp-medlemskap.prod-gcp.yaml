@@ -41,3 +41,5 @@ spec:
       value: medlemskap.medlemskapsvurderinger
     - name: FORHANDSVURDERING_VENTETID
       value: PT2M
+    - name: MIGRER_VED_OPPSLAG
+      value: "true"
