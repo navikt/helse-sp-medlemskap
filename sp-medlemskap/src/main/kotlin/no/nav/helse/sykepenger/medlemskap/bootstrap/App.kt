@@ -15,6 +15,7 @@ import no.nav.helse.sykepenger.medlemskap.infra.kafka.GrunnlagForAutomatiskMedle
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingResultatRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.MedlemskapsvurderingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.OutboxPubliseringsjobb
+import no.nav.helse.sykepenger.medlemskap.infra.kafka.PersonAvstemmingRiver
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.VentPåForhåndsvurdering
 import no.nav.helse.sykepenger.medlemskap.infra.kafka.VentendeBehovjobb
 import no.nav.helse.sykepenger.medlemskap.infra.rest.GetMedlemskapshistorikkBehandler
@@ -147,14 +148,14 @@ fun main() {
                 transaksjonProvider = transaksjonProvider,
                 spleisClient = spleisClient,
             )
-//            PersonAvstemmingRiver(
-//                rapidsConnection = rapid,
-//                personAvstemmingService =
-//                    PersonAvstemmingService(
-//                        transaksjonProvider = transaksjonProvider,
-//                        spleisClient = spleisClient,
-//                    ),
-//            )
+            PersonAvstemmingRiver(
+                rapidsConnection = rapid,
+                personAvstemmingService =
+                    PersonAvstemmingService(
+                        transaksjonProvider = transaksjonProvider,
+                        spleisClient = spleisClient,
+                    ),
+            )
             register(
                 OutboxPubliseringsjobb(
                     rapidsConnection = this,
