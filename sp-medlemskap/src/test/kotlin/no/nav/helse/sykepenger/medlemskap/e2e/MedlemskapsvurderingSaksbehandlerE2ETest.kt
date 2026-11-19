@@ -8,15 +8,11 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
 import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
-import tools.jackson.databind.JsonNode
 import tools.jackson.module.kotlin.jacksonObjectMapper
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -87,87 +83,6 @@ internal class MedlemskapsvurderingSaksbehandlerE2ETest : DatabaseTest() {
                     .asString(),
             )
         }
-
-    @ParameterizedTest(name = "automatisk {0}, manuell {1} gir kreverTotrinnsvurdering={2}")
-    @CsvSource(
-        "JA, JA, false",
-        "JA, NEI, true",
-        "NEI, JA, true",
-        "NEI, NEI, false",
-        "UAVKLART, JA, false",
-        "UAVKLART, NEI, true",
-        "UAVKLART_MED_BRUKERSPORSMAAL, JA, false",
-        "UAVKLART_MED_BRUKERSPORSMAAL, NEI, true",
-    )
-    fun `totrinnsvurdering kreves bare når manuell vurdering endrer om det blir utbetaling`(
-        automatiskSvar: String,
-        manuellStatus: String,
-        forventetTotrinn: Boolean,
-    ) = testApplication {
-        val app = E2ETestapp()
-        val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
-        val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
-        application { with(app) { settOpp(pseudoIdProvider) } }
-
-        app.vurderAutomatisk(automatiskSvar)
-
-        assertEquals(forventetTotrinn, vurderManuelt(app, pseudoId, manuellStatus).path("kreverTotrinnsvurdering").asBoolean())
-    }
-
-    @Test
-    fun `manuell vurdering uten tidligere vurdering krever ikke totrinnsvurdering`() =
-        testApplication {
-            val app = E2ETestapp()
-            val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
-            val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
-            application { with(app) { settOpp(pseudoIdProvider) } }
-
-            assertFalse(vurderManuelt(app, pseudoId, "NEI").path("kreverTotrinnsvurdering").asBoolean())
-        }
-
-    @Test
-    fun `ny manuell vurdering sammenlignes med forrige manuelle vurdering`() =
-        testApplication {
-            val app = E2ETestapp()
-            val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
-            val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
-            application { with(app) { settOpp(pseudoIdProvider) } }
-
-            app.vurderAutomatisk("JA")
-            assertTrue(vurderManuelt(app, pseudoId, "NEI").path("kreverTotrinnsvurdering").asBoolean())
-            assertFalse(vurderManuelt(app, pseudoId, "NEI").path("kreverTotrinnsvurdering").asBoolean())
-            assertTrue(vurderManuelt(app, pseudoId, "JA").path("kreverTotrinnsvurdering").asBoolean())
-        }
-
-    @Test
-    fun `vurdering på et annet skjæringstidspunkt påvirker ikke totrinnsvurdering`() =
-        testApplication {
-            val app = E2ETestapp()
-            val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
-            val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
-            application { with(app) { settOpp(pseudoIdProvider) } }
-
-            app.vurderAutomatisk("JA", skjæringstidspunkt = "2018-01-01")
-
-            assertFalse(vurderManuelt(app, pseudoId, "NEI").path("kreverTotrinnsvurdering").asBoolean())
-        }
-
-    /** Poster en manuell vurdering for 2018-02-01 og gir saksbehandlerhandlingen som publiseres fra outboxen. */
-    private suspend fun ApplicationTestBuilder.vurderManuelt(
-        app: E2ETestapp,
-        pseudoId: Any,
-        status: String,
-    ): JsonNode {
-        val antallFør = app.rapid.inspektør.size
-        val respons =
-            client.post("/api/personer/$pseudoId/vilkarsvurderinger/manuell") {
-                contentType(ContentType.Application.Json)
-                setBody("""{"skjæringstidspunkt": "2018-02-01", "status": "$status", "fritekstbegrunnelse": "x", "journalpostId": []}""")
-            }
-        assertEquals(HttpStatusCode.OK, respons.status)
-        app.outboxJobb.kjørEnRunde()
-        return app.meldinger.drop(antallFør).single { it.path("@event_name").asString() == "saksbehandlerhandling" }
-    }
 
     @Test
     fun `saksbehandler kan ikke la medlemskap være uavklart`() =

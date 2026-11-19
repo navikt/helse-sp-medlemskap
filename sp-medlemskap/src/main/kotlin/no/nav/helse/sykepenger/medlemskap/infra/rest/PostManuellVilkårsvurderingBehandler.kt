@@ -16,14 +16,6 @@ import java.time.Instant
 /**
  * Er [overstyringErSkruddPå] av, avvises kallet. Overstyring skal ikke skrus på før sp-medlemskap gjør
  * vurderingen selv, siden en manuell vurdering gjør sp-medlemskap til eier av vurderingen.
- *
- * Om vurderingen krever totrinnsvurdering, avgjøres ved å sammenligne med gjeldende vurdering. Låsen hindrer
- * at to samtidige manuelle vurderinger av samme person sammenlignes med den samme gjeldende vurderingen. Den
- * hindrer ikke at en automatisk vurdering eller migrering lagres i mellomtiden.
- *
- * Forbedringspotensial: Saksbehandler kan ha sett en eldre vurdering enn den som er gjeldende når kallet
- * kommer, for eksempel hvis det har kommet en ny vurdering mens saken var åpen i Speil. La Speil sende med
- * id-en til vurderingen saksbehandler så på, og svar med 409 Conflict hvis den ikke lenger er gjeldende.
  */
 internal class PostManuellVilkårsvurderingBehandler(
     private val overstyringErSkruddPå: Boolean = true,
@@ -53,11 +45,6 @@ internal class PostManuellVilkårsvurderingBehandler(
             personIkkeFunnet = { ApiManuellVilkårsvurderingFeil.PersonIkkeFunnet },
             manglerTilgang = { ApiManuellVilkårsvurderingFeil.ManglerTilgang },
         ) { identitetsnummer ->
-            kallKontekst.transaksjon.medlemskapsvurderinger.låsFor(identitetsnummer.value)
-            val gjeldendeVurdering =
-                kallKontekst.transaksjon.medlemskapsvurderinger
-                    .gjeldende(identitetsnummer.value, request.skjæringstidspunkt)
-
             val kravvurdering =
                 Medlemskapsvurdering.avSaksbehandler(
                     fødselsnummer = identitetsnummer.value,
@@ -67,8 +54,6 @@ internal class PostManuellVilkårsvurderingBehandler(
                     fritekstbegrunnelse = request.fritekstbegrunnelse,
                     journalpostId = request.journalpostId,
                 )
-
-            val kreverTotrinnsvurdering = (gjeldendeVurdering != null) && (gjeldendeVurdering.status.erOk != kravvurdering.status.erOk)
 
             kallKontekst.transaksjon.medlemskapsvurderinger.lagre(kravvurdering)
 
@@ -80,7 +65,7 @@ internal class PostManuellVilkårsvurderingBehandler(
                             saksbehandlerIdent = kallKontekst.saksbehandler.navIdent.value,
                             handlingId = kravvurdering.id.value,
                             handlingType = HandlingType.MANUELT_VURDERT_MEDLEMSKAP,
-                            kreverTotrinnsvurdering = kreverTotrinnsvurdering,
+                            kreverTotrinnsvurdering = true,
                             tidspunkt = Instant.now(),
                         ),
                     identitetsnummer = identitetsnummer,

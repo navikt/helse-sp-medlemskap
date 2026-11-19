@@ -15,12 +15,6 @@ import java.time.LocalDate
 internal class PostgresMedlemskapsvurderingRepository(
     private val session: Session,
 ) : MedlemskapsvurderingRepository {
-    override fun låsFor(fødselsnummer: String) {
-        @Language("PostgreSQL")
-        val sql = "select pg_advisory_xact_lock(hashtext('medlemskapsvurdering'), hashtext(:fodselsnummer))"
-        session.run(queryOf(sql, mapOf("fodselsnummer" to fødselsnummer)).asExecute)
-    }
-
     override fun lagre(vurdering: Medlemskapsvurdering) {
         @Language("PostgreSQL")
         val sql = """
