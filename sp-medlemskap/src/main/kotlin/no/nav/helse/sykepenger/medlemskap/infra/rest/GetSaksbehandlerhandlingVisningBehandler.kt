@@ -67,8 +67,8 @@ private fun tilVisningsfelter(
 
 private fun Medlemskapsstatus.visningsnavn(): String =
     when (this) {
-        Medlemskapsstatus.Ja -> "Medlem i folketrygden"
-        Medlemskapsstatus.Nei -> "Ikke medlem i folketrygden"
+        Medlemskapsstatus.Ja -> "Oppfylt"
+        Medlemskapsstatus.Nei -> "Ikke oppfylt"
         Medlemskapsstatus.Uavklart -> "Uavklart"
         Medlemskapsstatus.UavklartMedBrukerspørsmål -> "Uavklart med brukerspørsmål"
     }

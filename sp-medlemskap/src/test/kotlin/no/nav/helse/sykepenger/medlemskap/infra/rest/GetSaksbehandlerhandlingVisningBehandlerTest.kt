@@ -51,7 +51,7 @@ internal class GetSaksbehandlerhandlingVisningBehandlerTest : DatabaseTest() {
             assertEquals(HttpStatusCode.OK, response.status)
             val felter = response.json()["felter"]
             assertEquals(3, felter.size())
-            assertTekst(felter[0], "Medlemskap", "Medlem i folketrygden")
+            assertTekst(felter[0], "Medlemskap", "Oppfylt")
             assertEquals("LISTE", felter[1]["type"].asString())
             assertEquals("Journalposter", felter[1]["tittel"].asString())
             assertEquals(listOf("598373838", "598373839"), felter[1]["elementer"].values().map { it.asString() })
@@ -72,14 +72,14 @@ internal class GetSaksbehandlerhandlingVisningBehandlerTest : DatabaseTest() {
         }
 
     @Test
-    fun `nei vises som ikke medlem`() =
+    fun `nei vises som ikke oppfylt`() =
         testApplication {
             val vurdering = manuellVurdering(status = Medlemskapsstatus.Nei)
             val pseudoId = settOpp(lagret = listOf(vurdering))
 
             val response = client.get(url(pseudoId, vurdering.id.value))
 
-            assertTekst(response.json()["felter"][0], "Medlemskap", "Ikke medlem i folketrygden")
+            assertTekst(response.json()["felter"][0], "Medlemskap", "Ikke oppfylt")
         }
 
     @Test
