@@ -13,8 +13,13 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 internal class PostgresMedlemskapsvurderingRepositoryTest : DatabaseTest() {
     @ParameterizedTest
@@ -94,6 +99,40 @@ internal class PostgresMedlemskapsvurderingRepositoryTest : DatabaseTest() {
         assertNull(transaksjon { it.medlemskapsvurderinger.gjeldende(FØDSELSNUMMER, 1.februar) })
         assertEquals(emptyList(), transaksjon { it.medlemskapsvurderinger.historikk(FØDSELSNUMMER, 1.februar) })
         assertNull(transaksjon { it.medlemskapsvurderinger.finn(MedlemskapsvurderingId.ny()) })
+    }
+
+    @Test
+    fun `låsFor venter til en annen transaksjon som har låst samme person er ferdig`() {
+        val harLåst = CountDownLatch(1)
+        val slippLåsen = CountDownLatch(1)
+        Executors.newFixedThreadPool(2).use { executor ->
+            val første =
+                executor.submit {
+                    transaksjon {
+                        it.medlemskapsvurderinger.låsFor(FØDSELSNUMMER)
+                        harLåst.countDown()
+                        slippLåsen.await(10, TimeUnit.SECONDS)
+                    }
+                }
+            assertTrue(harLåst.await(10, TimeUnit.SECONDS))
+
+            val andre = executor.submit { transaksjon { it.medlemskapsvurderinger.låsFor(FØDSELSNUMMER) } }
+            assertThrows<TimeoutException> { andre.get(500, TimeUnit.MILLISECONDS) }
+
+            slippLåsen.countDown()
+            første.get(10, TimeUnit.SECONDS)
+            andre.get(10, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
+    fun `låsFor venter ikke på en annen person`() {
+        transaksjon {
+            it.medlemskapsvurderinger.låsFor(FØDSELSNUMMER)
+            Executors.newSingleThreadExecutor().use { executor ->
+                executor.submit { transaksjon { it.medlemskapsvurderinger.låsFor("01010112345") } }.get(10, TimeUnit.SECONDS)
+            }
+        }
     }
 
     private fun overført(
