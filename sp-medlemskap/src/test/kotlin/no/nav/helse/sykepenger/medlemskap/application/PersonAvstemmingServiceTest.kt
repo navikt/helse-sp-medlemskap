@@ -17,6 +17,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 internal class PersonAvstemmingServiceTest : DatabaseTest() {
     private val transaksjon = Database.transaksjonProvider
@@ -157,6 +160,33 @@ internal class PersonAvstemmingServiceTest : DatabaseTest() {
         )
         assertEquals(0, service.lagreMedlemskapsvurderinger(FØDSELSNUMMER))
         assertEquals(1, antallSpleisKall)
+        assertEquals(1, Lagret.nedlastinger().size)
+    }
+
+    @Test
+    fun `samtidige avstemminger av samme person lagrer vurderingene bare én gang`() {
+        spleisSvar = listOf(vurdering(), vurdering())
+        val beggeHarHentetFraSpleis = CyclicBarrier(2)
+        val samtidigService =
+            PersonAvstemmingService(
+                transaksjonProvider = transaksjon,
+                spleisClient =
+                    object : ISpleisClient {
+                        override fun hentMedlemskapsvurderinger(fødselsnummer: String): List<SpleisMedlemskapsvurdering> {
+                            beggeHarHentetFraSpleis.await(10, TimeUnit.SECONDS)
+                            return spleisSvar
+                        }
+                    },
+            )
+
+        val antallLagret =
+            Executors.newFixedThreadPool(2).use { executor ->
+                List(2) { executor.submit<Int> { samtidigService.lagreMedlemskapsvurderinger(FØDSELSNUMMER) } }
+                    .map { it.get(30, TimeUnit.SECONDS) }
+            }
+
+        assertEquals(listOf(0, 2), antallLagret.sorted())
+        assertEquals(2, Lagret.antallVurderinger())
         assertEquals(1, Lagret.nedlastinger().size)
     }
 

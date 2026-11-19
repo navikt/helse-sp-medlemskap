@@ -28,8 +28,10 @@ internal class PersonAvstemmingService(
 
         val vurderinger = hentFraSpleis(fødselsnummer)
 
-        val (antallLagret, antallHoppetOver) =
+        val resultat =
             transaksjonProvider.transaksjon { kontekst ->
+                kontekst.migreringslogg.låsFor(fødselsnummer)
+                if (kontekst.migreringslogg.finnesFor(fødselsnummer)) return@transaksjon null
                 var antallLagret = 0
                 var antallHoppetOver = 0
                 vurderinger.forEach { vurdering ->
@@ -51,6 +53,11 @@ internal class PersonAvstemmingService(
                 )
                 antallLagret to antallHoppetOver
             }
+        if (resultat == null) {
+            loggInfo("Person-avstemming ble behandlet av et samtidig kall")
+            return 0
+        }
+        val (antallLagret, antallHoppetOver) = resultat
 
         loggInfo(
             "Behandlet person-avstemming",

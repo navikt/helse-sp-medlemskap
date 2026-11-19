@@ -24,6 +24,12 @@ internal class PostgresMigreringsloggRepository(
         ) ?: false
     }
 
+    override fun låsFor(fødselsnummer: String) {
+        @Language("PostgreSQL")
+        val sql = "select pg_advisory_xact_lock(hashtext('migreringslogg'), hashtext(:fodselsnummer))"
+        session.run(queryOf(sql, mapOf("fodselsnummer" to fødselsnummer)).asExecute)
+    }
+
     override fun lagre(
         fødselsnummer: String,
         antallVurderinger: Int,
