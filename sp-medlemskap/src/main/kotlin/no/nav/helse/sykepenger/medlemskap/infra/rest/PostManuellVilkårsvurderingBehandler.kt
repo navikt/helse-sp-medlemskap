@@ -11,6 +11,7 @@ import no.nav.helse.sykepenger.medlemskap.rammeverk.auth.Tilgang
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.KallKontekst
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.PostBehandler
 import no.nav.helse.sykepenger.medlemskap.rammeverk.rest.RestResponse
+import no.nav.sykepenger.libs.logging.loggInfo
 import java.time.Instant
 
 /**
@@ -45,6 +46,16 @@ internal class PostManuellVilkårsvurderingBehandler(
             personIkkeFunnet = { ApiManuellVilkårsvurderingFeil.PersonIkkeFunnet },
             manglerTilgang = { ApiManuellVilkårsvurderingFeil.ManglerTilgang },
         ) { identitetsnummer ->
+            val gjeldende = kallKontekst.transaksjon.medlemskapsvurderinger.gjeldende(identitetsnummer.value, request.skjæringstidspunkt)
+            if (gjeldende == null || gjeldende.id.value != request.gjeldendeMedlemskapsvurderingId) {
+                loggInfo(
+                    "Avviser manuell medlemskapsvurdering fordi saksbehandler så på en vurdering som ikke er gjeldende",
+                    "forespurtMedlemskapsvurderingId" to request.gjeldendeMedlemskapsvurderingId.toString(),
+                    "gjeldendeMedlemskapsvurderingId" to gjeldende?.id?.value?.toString(),
+                )
+                return@medPerson RestResponse.feil(ApiManuellVilkårsvurderingFeil.UtdatertVurdering)
+            }
+
             val kravvurdering =
                 Medlemskapsvurdering.avSaksbehandler(
                     fødselsnummer = identitetsnummer.value,
@@ -56,6 +67,12 @@ internal class PostManuellVilkårsvurderingBehandler(
                 )
 
             kallKontekst.transaksjon.medlemskapsvurderinger.lagre(kravvurdering)
+            // To vurderinger som erstatter samme id, avslører en samtidig lagring som sjekken over ikke fanger
+            loggInfo(
+                "Manuell medlemskapsvurdering erstatter gjeldende vurdering",
+                "erstattetMedlemskapsvurderingId" to gjeldende.id.value.toString(),
+                "nyMedlemskapsvurderingId" to kravvurdering.id.value.toString(),
+            )
 
             kallKontekst.transaksjon.outbox.leggTil(
                 OutboxKonvolutt.ny(

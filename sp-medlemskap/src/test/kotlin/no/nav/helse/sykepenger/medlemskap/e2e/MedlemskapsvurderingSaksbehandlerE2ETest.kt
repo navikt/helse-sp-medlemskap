@@ -1,6 +1,8 @@
 package no.nav.helse.sykepenger.medlemskap.e2e
 
 import com.github.navikt.tbd_libs.personpseudoid.Identitetsnummer
+import com.github.navikt.tbd_libs.personpseudoid.PersonPseudoId
+import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -9,11 +11,13 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
+import no.nav.helse.sykepenger.medlemskap.infra.db.Database
 import no.nav.helse.sykepenger.medlemskap.infra.db.DatabaseTest
 import no.nav.helse.sykepenger.medlemskap.rammeverk.testfixtures.InMemoryPersonPseudoIdProvider
 import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
 import tools.jackson.module.kotlin.jacksonObjectMapper
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
@@ -39,6 +43,7 @@ internal class MedlemskapsvurderingSaksbehandlerE2ETest : DatabaseTest() {
             val request = """
                 {
                   "skjæringstidspunkt": "2018-02-01",
+                  "gjeldendeMedlemskapsvurderingId": "$automatisk",
                   "status": "JA",
                   "fritekstbegrunnelse": "Dokumentert medlemskap",
                   "journalpostId": ["journalpost-1"]
@@ -72,7 +77,7 @@ internal class MedlemskapsvurderingSaksbehandlerE2ETest : DatabaseTest() {
             assertEquals("Dokumentert medlemskap", medlemskapsvurdering["kilde"]["fritekstbegrunnelse"].asString())
 
             // Spleis spør på nytt for samme skjæringstidspunkt og får den manuelle vurderingen
-            app.rapid.sendTestMessage(E2ETestapp.medlemskapsvurderingBehov(java.util.UUID.randomUUID()), FØDSELSNUMMER)
+            app.rapid.sendTestMessage(E2ETestapp.medlemskapsvurderingBehov(UUID.randomUUID()), FØDSELSNUMMER)
             assertEquals(
                 manuell,
                 app.meldinger
@@ -92,12 +97,54 @@ internal class MedlemskapsvurderingSaksbehandlerE2ETest : DatabaseTest() {
             val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
             application { with(app) { settOpp(pseudoIdProvider) } }
 
-            val respons =
-                client.post("/api/personer/$pseudoId/vilkarsvurderinger/manuell") {
-                    contentType(ContentType.Application.Json)
-                    setBody("""{"skjæringstidspunkt": "2018-02-01", "status": "UAVKLART", "fritekstbegrunnelse": "x", "journalpostId": []}""")
-                }
+            val automatisk = app.vurderAutomatisk("UAVKLART")
+            val respons = client.vurderManuelt(pseudoId, gjeldende = automatisk, status = "UAVKLART")
 
             assertEquals(HttpStatusCode.BadRequest, respons.status)
         }
+
+    @Test
+    fun `avviser manuell vurdering når saksbehandler så på en vurdering som ikke lenger er gjeldende`() =
+        testApplication {
+            val app = E2ETestapp()
+            val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
+            val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
+            application { with(app) { settOpp(pseudoIdProvider) } }
+
+            val automatisk = app.vurderAutomatisk("NEI")
+            assertEquals(HttpStatusCode.OK, client.vurderManuelt(pseudoId, gjeldende = automatisk).status)
+            val antallVurderinger = Database.antallRader("medlemskapsvurdering")
+            val antallUtgående = Database.antallRader("outbox")
+
+            val respons = client.vurderManuelt(pseudoId, gjeldende = automatisk)
+
+            assertEquals(HttpStatusCode.Conflict, respons.status)
+            assertEquals(antallVurderinger, Database.antallRader("medlemskapsvurdering"))
+            assertEquals(antallUtgående, Database.antallRader("outbox"))
+        }
+
+    @Test
+    fun `avviser manuell vurdering når skjæringstidspunktet ikke har noen vurdering`() =
+        testApplication {
+            val app = E2ETestapp()
+            val pseudoIdProvider = InMemoryPersonPseudoIdProvider()
+            val pseudoId = pseudoIdProvider.nyPersonPseudoId(identitetsnummer)
+            application { with(app) { settOpp(pseudoIdProvider) } }
+
+            val respons = client.vurderManuelt(pseudoId, gjeldende = UUID.randomUUID().toString())
+
+            assertEquals(HttpStatusCode.Conflict, respons.status)
+            assertEquals(0, Database.antallRader("medlemskapsvurdering"))
+        }
+
+    private suspend fun HttpClient.vurderManuelt(
+        pseudoId: PersonPseudoId,
+        gjeldende: String,
+        status: String = "JA",
+    ) = post("/api/personer/$pseudoId/vilkarsvurderinger/manuell") {
+        contentType(ContentType.Application.Json)
+        setBody(
+            """{"skjæringstidspunkt": "2018-02-01", "gjeldendeMedlemskapsvurderingId": "$gjeldende", "status": "$status", "fritekstbegrunnelse": "x", "journalpostId": []}""",
+        )
+    }
 }

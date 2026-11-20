@@ -1,14 +1,17 @@
-@file:UseContextualSerialization(LocalDate::class)
+@file:UseContextualSerialization(LocalDate::class, UUID::class)
 
 package no.nav.helse.sykepenger.medlemskap.infra.rest
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseContextualSerialization
 import java.time.LocalDate
+import java.util.UUID
 
+/** [gjeldendeMedlemskapsvurderingId] er vurderingen saksbehandler så på da den manuelle vurderingen ble gjort. */
 @Serializable
 internal data class ApiManuellVilkårsvurderingRequest(
     val skjæringstidspunkt: LocalDate,
+    val gjeldendeMedlemskapsvurderingId: UUID,
     val status: ApiManuellMedlemskapsstatus,
     val fritekstbegrunnelse: String,
     val journalpostId: List<String>,

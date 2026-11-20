@@ -9,4 +9,5 @@ internal enum class ApiManuellVilkårsvurderingFeil(
     PersonIkkeFunnet(404, "Person ikke funnet"),
     ManglerTilgang(403, "Mangler tilgang"),
     OverstyringErSkruddAv(409, "Overstyring av medlemskap er ikke skrudd på"),
+    UtdatertVurdering(409, "Medlemskapsvurderingen er endret siden saksbehandler så på den"),
 }

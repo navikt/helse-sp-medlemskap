@@ -86,6 +86,7 @@ internal class OverstyringSkruddAvTest : DatabaseTest() {
             val request = """
                 {
                   "skjæringstidspunkt": "2024-02-01",
+                  "gjeldendeMedlemskapsvurderingId": "00000000-0000-0000-0000-000000000000",
                   "status": "JA",
                   "fritekstbegrunnelse": "Begrunnelse",
                   "journalpostId": []
