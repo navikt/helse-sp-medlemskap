@@ -67,9 +67,9 @@ internal class MedlemskapsvurderingSaksbehandlerE2ETest : DatabaseTest() {
             assertEquals("JA", resultat.path("svar").asString())
             assertTrue(resultat.path("ok").asBoolean())
 
-            val krav = objectMapper.readTree(client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=$manuell").bodyAsText())["krav"].single()
-            assertEquals("SAKSBEHANDLER", krav["kilde"]["kildetype"].asString())
-            assertEquals("Dokumentert medlemskap", krav["kilde"]["fritekstbegrunnelse"].asString())
+            val medlemskapsvurdering = objectMapper.readTree(client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=$manuell").bodyAsText())["medlemskapsvurdering"]
+            assertEquals("SAKSBEHANDLER", medlemskapsvurdering["kilde"]["kildetype"].asString())
+            assertEquals("Dokumentert medlemskap", medlemskapsvurdering["kilde"]["fritekstbegrunnelse"].asString())
 
             // Spleis spør på nytt for samme skjæringstidspunkt og får den manuelle vurderingen
             app.rapid.sendTestMessage(E2ETestapp.medlemskapsvurderingBehov(java.util.UUID.randomUUID()), FØDSELSNUMMER)

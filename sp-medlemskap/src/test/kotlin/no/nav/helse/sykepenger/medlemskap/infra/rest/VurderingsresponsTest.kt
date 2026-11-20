@@ -22,10 +22,9 @@ internal class VurderingsresponsTest {
         val respons = Vurderingsrespons.fra(vurdering)
 
         assertEquals(1.februar, respons.skjæringstidspunkt)
-        val krav = respons.krav.single()
-        assertEquals(vurdering.id.value, krav.id)
-        assertEquals(ApiKravkode.MEDLEMSKAP, krav.kravkode)
-        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), krav.kilde)
+        val apiVurdering = respons.medlemskapsvurdering
+        assertEquals(vurdering.id.value, apiVurdering.id)
+        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), apiVurdering.kilde)
     }
 
     @Test
@@ -35,11 +34,11 @@ internal class VurderingsresponsTest {
                 .start(FNR, 1.februar, 1.januar til 31.januar)
                 .motta(Medlemskapsstatus.UavklartMedBrukerspørsmål, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
 
-        val krav = Vurderingsrespons.fra(vurdering).krav.single()
+        val apiVurdering = Vurderingsrespons.fra(vurdering).medlemskapsvurdering
 
         assertEquals(
             ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar), listOf(ApiÅrsak("REGEL_3", "Forklaring"))),
-            krav.kilde,
+            apiVurdering.kilde,
         )
     }
 
@@ -50,10 +49,10 @@ internal class VurderingsresponsTest {
                 .start(FNR, 1.februar, 1.januar til 31.januar)
                 .motta(Medlemskapsstatus.Uavklart, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
 
-        val krav = Vurderingsrespons.fra(vurdering).krav.single()
+        val apiVurdering = Vurderingsrespons.fra(vurdering).medlemskapsvurdering
 
-        assertEquals(ApiMedlemskapsstatus.UAVKLART, krav.status)
-        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), krav.kilde)
+        assertEquals(ApiMedlemskapsstatus.UAVKLART, apiVurdering.status)
+        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), apiVurdering.kilde)
     }
 
     @Test
@@ -63,40 +62,38 @@ internal class VurderingsresponsTest {
                 .start(FNR, 1.februar, 1.januar til 31.januar)
                 .motta(Medlemskapsstatus.Uavklart, "versjon", listOf(Årsak("REGEL_3", "Forklaring")))
 
-        val innslag = Vurderingsrespons.historikk(1.februar, listOf(vurdering)).historikk.single()
+        val innslag = Vurderingsrespons.historikk(1.februar, listOf(vurdering)).historikk
 
-        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), innslag.medlemskapsvurdering.kilde)
+        assertEquals(ApiVurderingskilde.Automatisk("versjon", ApiPeriode(1.januar, 31.januar)), innslag.first().medlemskapsvurdering.kilde)
     }
 
     @ParameterizedTest
     @CsvSource(
-        "Ja, JA, true",
-        "Nei, NEI, false",
-        "Uavklart, UAVKLART, true",
-        "UavklartMedBrukerspørsmål, UAVKLART_MED_BRUKERSPORSMAAL, true",
+        "Ja, JA",
+        "Nei, NEI",
+        "Uavklart, UAVKLART",
+        "UavklartMedBrukerspørsmål, UAVKLART_MED_BRUKERSPORSMAAL",
     )
-    fun `status og ok`(
+    fun status(
         status: Medlemskapsstatus,
         forventetStatus: ApiMedlemskapsstatus,
-        forventetOk: Boolean,
     ) {
         val vurdering = Medlemskapsvurdering.overførtFraSpleis(MedlemskapsvurderingId.ny(), FNR, 1.februar, status, Instant.now())
 
-        val krav = Vurderingsrespons.fra(vurdering).krav.single()
+        val apiVurdering = Vurderingsrespons.fra(vurdering).medlemskapsvurdering
 
-        assertEquals(forventetStatus, krav.status)
-        assertEquals(forventetOk, krav.medlemskapOk)
-        assertEquals(ApiVurderingskilde.OverførtFraSpleis(), krav.kilde)
+        assertEquals(forventetStatus, apiVurdering.status)
+        assertEquals(ApiVurderingskilde.OverførtFraSpleis(), apiVurdering.kilde)
     }
 
     @Test
     fun `manuell vurdering har saksbehandler som kilde`() {
         val vurdering = Medlemskapsvurdering.avSaksbehandler(FNR, 1.februar, Medlemskapsstatus.Nei, "A123456", "Begrunnelse", listOf("1"))
 
-        val krav = Vurderingsrespons.fra(vurdering).krav.single()
+        val apiVurdering = Vurderingsrespons.fra(vurdering).medlemskapsvurdering
 
-        assertEquals(ApiVurderingskilde.Saksbehandler("A123456", "Begrunnelse", listOf("1")), krav.kilde)
-        assertEquals(vurdering.vurdertTidspunkt, krav.vurdertTidspunkt)
+        assertEquals(ApiVurderingskilde.Saksbehandler("A123456", "Begrunnelse", listOf("1")), apiVurdering.kilde)
+        assertEquals(vurdering.vurdertTidspunkt, apiVurdering.vurdertTidspunkt)
     }
 
     @Test
@@ -107,8 +104,7 @@ internal class VurderingsresponsTest {
             ApiVurderingskilde.OverførtFraInfotrygd(),
             Vurderingsrespons
                 .fra(vurdering)
-                .krav
-                .single()
+                .medlemskapsvurdering
                 .kilde,
         )
     }

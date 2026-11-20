@@ -9,7 +9,7 @@ internal object Vurderingsrespons {
     fun fra(vurdering: Medlemskapsvurdering): ApiVilkårsvurderingerForPersonResponse =
         ApiVilkårsvurderingerForPersonResponse(
             skjæringstidspunkt = vurdering.skjæringstidspunkt,
-            krav = listOf(vurdering.tilApi()),
+            medlemskapsvurdering = vurdering.tilApi(),
         )
 
     fun historikk(
@@ -28,8 +28,6 @@ internal object Vurderingsrespons {
 private fun Medlemskapsvurdering.tilApi() =
     ApiMedlemskapsvurdering(
         id = id.value,
-        kravkode = ApiKravkode.MEDLEMSKAP,
-        medlemskapOk = erOk,
         status = status.tilApi(),
         vurdertTidspunkt = vurdertTidspunkt,
         kilde = kilde.tilApi(visÅrsaker = status.skalViseÅrsaker),

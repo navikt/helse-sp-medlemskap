@@ -225,12 +225,10 @@ internal class GetVilkårsvurderingerForPersonBehandlerTest : DatabaseTest() {
 
             assertEquals("2024-02-01", json["skjæringstidspunkt"].asString())
 
-            val krav = json["krav"].single()
-            assertEquals("MEDLEMSKAP", krav["kravkode"].asString())
-            assertEquals(true, krav["medlemskapOk"].asBoolean())
-            assertEquals("JA", krav["status"].asString())
+            val medlemskapsvurdering = json["medlemskapsvurdering"]
+            assertEquals("JA", medlemskapsvurdering["status"].asString())
 
-            val kilde = krav["kilde"]
+            val kilde = medlemskapsvurdering["kilde"]
             assertEquals("AUTOMATISK", kilde["kildetype"].asString()) { "Uten diskriminator kan Speil ikke se hvilken kilde den fikk: $kilde" }
             assertEquals("2024-02-01", kilde["oppslagsperiode"]["fom"].asString())
             assertTrue(kilde["årsaker"].isArray) { "Speil forventer årsaker som en liste, også når den er tom: $kilde" }
@@ -263,11 +261,10 @@ internal class GetVilkårsvurderingerForPersonBehandlerTest : DatabaseTest() {
             val response = client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=${vurdering.id.value}")
             assertEquals(HttpStatusCode.OK, response.status)
 
-            val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
+            val medlemskapsvurdering = jacksonObjectMapper().readTree(response.bodyAsText())["medlemskapsvurdering"]
 
-            assertEquals("OVERFOERT_FRA_INFOTRYGD", krav["kilde"]["kildetype"].asString())
-            assertEquals(true, krav["medlemskapOk"].asBoolean())
-            assertEquals("JA", krav["status"].asString())
+            assertEquals("OVERFOERT_FRA_INFOTRYGD", medlemskapsvurdering["kilde"]["kildetype"].asString())
+            assertEquals("JA", medlemskapsvurdering["status"].asString())
         }
 
     /**
@@ -300,10 +297,9 @@ internal class GetVilkårsvurderingerForPersonBehandlerTest : DatabaseTest() {
             val response = client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=$medlemskapsvurderingId")
             assertEquals(HttpStatusCode.OK, response.status)
 
-            val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
-            assertEquals(false, krav["medlemskapOk"].asBoolean())
-            assertEquals("NEI", krav["status"].asString())
-            assertEquals("OVERFOERT_FRA_SPLEIS", krav["kilde"]["kildetype"].asString())
+            val medlemskapsvurdering = jacksonObjectMapper().readTree(response.bodyAsText())["medlemskapsvurdering"]
+            assertEquals("NEI", medlemskapsvurdering["status"].asString())
+            assertEquals("OVERFOERT_FRA_SPLEIS", medlemskapsvurdering["kilde"]["kildetype"].asString())
         }
 
     @Test
@@ -449,9 +445,8 @@ internal class GetVilkårsvurderingerForPersonBehandlerTest : DatabaseTest() {
             val response = client.get("/api/personer/$pseudoId/vilkarsvurderinger?medlemskapsvurderingId=$medlemskapsvurderingId")
             assertEquals(HttpStatusCode.OK, response.status)
 
-            val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
-            assertEquals("OVERFOERT_FRA_INFOTRYGD", krav["kilde"]["kildetype"].asString())
-            assertEquals(true, krav["medlemskapOk"].asBoolean())
+            val medlemskapsvurdering = jacksonObjectMapper().readTree(response.bodyAsText())["medlemskapsvurdering"]
+            assertEquals("OVERFOERT_FRA_INFOTRYGD", medlemskapsvurdering["kilde"]["kildetype"].asString())
         }
 
     @Test

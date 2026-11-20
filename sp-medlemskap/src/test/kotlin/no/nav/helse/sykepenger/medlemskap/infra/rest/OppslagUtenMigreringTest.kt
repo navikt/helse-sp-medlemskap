@@ -115,9 +115,9 @@ internal class OppslagUtenMigreringTest : DatabaseTest() {
             val response = hentVurdering(fraSpleis.medlemskapsvurderingId)
 
             assertEquals(HttpStatusCode.OK, response.status)
-            val krav = jacksonObjectMapper().readTree(response.bodyAsText())["krav"].single()
-            assertEquals(fraSpleis.medlemskapsvurderingId.toString(), krav["id"].asString())
-            assertEquals("OVERFOERT_FRA_SPLEIS", krav["kilde"]["kildetype"].asString())
+            val medlemskapsvurdering = jacksonObjectMapper().readTree(response.bodyAsText())["medlemskapsvurdering"]
+            assertEquals(fraSpleis.medlemskapsvurderingId.toString(), medlemskapsvurdering["id"].asString())
+            assertEquals("OVERFOERT_FRA_SPLEIS", medlemskapsvurdering["kilde"]["kildetype"].asString())
             assertEquals(0, Database.antallRader("medlemskapsvurdering"))
             assertEquals(0, Database.antallRader("migreringslogg"))
         }

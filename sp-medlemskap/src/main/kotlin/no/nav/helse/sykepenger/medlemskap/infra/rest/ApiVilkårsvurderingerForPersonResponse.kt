@@ -13,23 +13,16 @@ import java.util.UUID
 @Serializable
 internal data class ApiVilkårsvurderingerForPersonResponse(
     val skjæringstidspunkt: LocalDate,
-    val krav: List<ApiMedlemskapsvurdering>,
+    val medlemskapsvurdering: ApiMedlemskapsvurdering,
 )
 
 @Serializable
 internal data class ApiMedlemskapsvurdering(
     val id: UUID,
-    val kravkode: ApiKravkode,
-    val medlemskapOk: Boolean,
     val status: ApiMedlemskapsstatus,
     val vurdertTidspunkt: Instant,
     val kilde: ApiVurderingskilde,
 )
-
-@Serializable
-internal enum class ApiKravkode {
-    MEDLEMSKAP,
-}
 
 @Serializable
 internal enum class ApiMedlemskapsstatus {

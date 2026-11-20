@@ -125,11 +125,11 @@ internal class GetVilkårsvurderingerForPersonTransaksjonTest : DatabaseTest() {
             }
             val json = jacksonObjectMapper().readTree(response.bodyAsText())
             assertEquals("2024-03-01", json["skjæringstidspunkt"].asString())
-            val krav = json["krav"].single()
-            assertEquals(etterspurt.medlemskapsvurderingId.value.toString(), krav["id"].asString()) {
+            val medlemskapsvurdering = json["medlemskapsvurdering"]
+            assertEquals(etterspurt.medlemskapsvurderingId.value.toString(), medlemskapsvurdering["id"].asString()) {
                 "Responsen skal inneholde den etterspurte vurderingen, ikke en annen av personens vurderinger: $json"
             }
-            assertEquals("OVERFOERT_FRA_SPLEIS", krav["kilde"]["kildetype"].asString())
+            assertEquals("OVERFOERT_FRA_SPLEIS", medlemskapsvurdering["kilde"]["kildetype"].asString())
             assertEquals(2, Database.antallRader("medlemskapsvurdering"))
             assertEquals(1, Database.antallRader("migreringslogg"))
             val lagret = transaksjon { it.medlemskapsvurderinger.finn(enAnnen.medlemskapsvurderingId) }
