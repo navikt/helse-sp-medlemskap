@@ -600,7 +600,7 @@ Endepunktet og tilgangen er laget i `sykepenger-api/.../spleis/medlemskap/Medlem
 
 Steget er laget i Spleis. `EndretVurderingPåSkjæringstidspunktRiver` lytter på `endret_medlemskapsvurdering`, og `medEndretMedlemskapsvurdering` lager et nytt grunnlag med id-en fra sp-medlemskap og starter revurdering med årsaken `ENDRET_MEDLEMSKAPSVURDERING`. Testene ligger i `EndretVurderingPåSkjæringstidspunktTest` og `MessageMediatorTest`.
 
-Eventet har ikke med status, så Spleis bytter bare id-en. `medlemskapstatus` på grunnlaget beholdes. Det er greit fordi beregningen bruker svaret fra `MedlemskapsvurderingResultat` for den nye id-en (steg 6). Med togglen `MEDLEMSKAPSVURDERINGRESULTATBEHOV` av gir revurderingen samme resultat som før, og Speil viser fortsatt statusen på grunnlaget.
+Eventet har ikke med status, så Spleis bytter bare id-en. `medlemskapstatus` på grunnlaget beholdes. Det er greit fordi beregningen bruker svaret fra `MedlemskapsvurderingResultat` for den nye id-en (steg 6), og Speil viser vurderingen fra sp-medlemskap (steg 6b).
 
 Dette må være på plass i prod før sp-medlemskap begynner å lage nye vurderinger og publisere `endret_medlemskapsvurdering` i prod. Det trenger ikke være på plass før steg 6. Se [Når kan kanalen utsettes](#når-kan-kanalen-for-endrede-vurderinger-utsettes).
 
@@ -625,10 +625,7 @@ Etter dette steget kan Spleis ikke beregne uten svar fra sp-medlemskap.
 
 Behovet, lesingen av svaret og reserveløsningen ble laget bak togglen `MEDLEMSKAPSVURDERINGRESULTATBEHOV`. Togglen ble skrudd på i prod 04.11 ([`59a0e4a`](https://github.com/navikt/helse-spleis/commit/59a0e4a2b8)) og fjernet fra koden 05.11 ([`684512f`](https://github.com/navikt/helse-spleis/commit/684512f418)). Reserveløsningen er ikke fjernet: Mangler svaret, bruker `Vedtaksperiode.medlemskapstatus` fortsatt statusen på grunnlaget. Når svaret er ulikt statusen på grunnlaget, skriver Spleis en info-melding i aktivitetsloggen. Den kommer ikke i Team Logs, bare på rapiden som `aktivitetslogg_ny_aktivitet`. Testene ligger i `MedlemskapE2E`, `YtelserRiverMappingTest` og `BehovkontraktTest`.
 
-Varslene er flyttet bak den samme togglen. `ok` er ikke nok til å velge varsel, så Spleis leser hele `svar`:
-
-- Med togglen på gir vilkårsprøvingen ingen medlemskapsvarsler. Beregningen gir `RV_MV_2` ved `NEI` og `RV_MV_1` ved `UAVKLART_MED_BRUKERSPORSMAAL`, ut fra svaret fra sp-medlemskap. Mangler svaret, brukes statusen på grunnlaget.
-- Med togglen av gir vilkårsprøvingen varslene som før, og beregningen gir ingen.
+Varslene ble flyttet bak den samme togglen. `ok` er ikke nok til å velge varsel, så Spleis leser hele `svar`. Nå som togglen er fjernet, gir vilkårsprøvingen ingen medlemskapsvarsler. Beregningen gir `RV_MV_2` ved `NEI` og `RV_MV_1` ved `UAVKLART_MED_BRUKERSPORSMAAL`, ut fra svaret fra sp-medlemskap. Mangler svaret, brukes statusen på grunnlaget.
 
 Varslene kommer derfor bare én gang, og de følger statusen beregningen faktisk bruker.
 
@@ -647,7 +644,8 @@ I Speil:
 
 - `sp-medlemskap` er lagt til i `deploy/prod.yml`, og backenden er ikke lenger bare for dev.
 - Togglen «Ny medlemskapsvisning» fantes i toggle-menyen også i prod. Menyen vises bare for utviklere, og i prod ble togglen nullstilt når siden ble lastet på nytt. Togglen er fjernet nå (se under).
-- Knappen «Vurder vilkår» vises bare når `useKanOverstyreMedlemskap` er sann. Den var bare sann i dev til 26.11. Da ble den sann også i prod, og knappen er ikke lenger begrenset til coach, fagkoordinator og supersaksbehandler.
+- Knappen «Vurder vilkår» var styrt av `useKanOverstyreMedlemskap`, som bare var sann i dev. 26.11 ble hooken fjernet, og knappen vises nå i prod for alle saksbehandlere, ikke bare coach, fagkoordinator og supersaksbehandler. Knappen vises bare når vurderingen er `UAVKLART_MED_BRUKERSPORSMAAL` eller allerede er vurdert manuelt, og ikke for vurderinger overført fra Infotrygd. Denne begrensningen ligger bare i Speil.
+- Speil viser `RV_MV_1` som feil når sp-medlemskap svarer `UAVKLART_MED_BRUKERSPORSMAAL` eller ikke svarer for perioden til godkjenning (`useSkalViseMedlemskapsvarselSomFeil`). Det gjelder også i prod fra 26.11.
 - Beslutter ser ikke «Vurder vilkår», verken for medlemskap eller opptjening. Inngangsvilkårene er read only når oppgaven er en beslutteroppgave, også når beslutter har beslutteroppgavetilgang ([`211273712`](https://github.com/navikt/helse-speil/commit/211273712), 19.11). Før dette kunne beslutter med tilgang vurdere vilkårene.
 - En manuell medlemskapsvurdering kan ekspanderes i saksbehandlerhistorikken. Speil henter detaljene fra `GET /api/personer/{personId}/saksbehandlerhandlinger/{handlingId}/visning` i sp-medlemskap gjennom en egen proxy-rute ([`865e9ce3d`](https://github.com/navikt/helse-speil/commit/865e9ce3d), 19.11). Visningen har feltene «Medlemskap», «Journalposter» og «Begrunnelse». Statusen vises som «Oppfylt» eller «Ikke oppfylt» ([`f9b3bff`](https://github.com/navikt/helse-sp-medlemskap/commit/f9b3bff)). Automatiske og overførte vurderinger har ingen detaljer.
 
@@ -656,7 +654,7 @@ Før steget skrus på i prod:
 - Steg 3 må være ferdig, slik at Speil har `medlemskapsvurderingId`.
 - sp-medlemskap må være deployet i prod med tilgang til spleis-api (steg 5). Speil-oppsettet i `deploy/prod.yml` forutsetter at appen kjører.
 
-Steg 7 skulle slå på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod. Steg 7 kom i prod 13.11, og overstyringen ble skrudd på i prod 26.11 ved at bryteren ble fjernet. Steg 8 slo på `MIGRER_VED_OPPSLAG` 16.11.
+Steg 7 skulle slå på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod. Steg 7 kom i prod 13.11, og overstyringen ble skrudd på i prod 26.11 ved at bryteren i sp-medlemskap og `useKanOverstyreMedlemskap` i Speil ble fjernet. Steg 8 slo på `MIGRER_VED_OPPSLAG` 16.11.
 
 Steget er i prod siden 10.11 ([`0bb81ad`](https://github.com/navikt/helse-speil/commit/0bb81ad27) i Speil og [`23efd40`](https://github.com/navikt/helse-sp-medlemskap/commit/23efd40) i sp-medlemskap).
 
@@ -670,14 +668,14 @@ Behovet heter `Medlemskapsvurdering` og sendes ved vilkårsprøving, bak toggle.
 - Behold `Medlemskap` så lenge statusen på grunnlaget trengs. sp-medlemskap svarer bare med `id`, men `medlemskapstatus` på grunnlaget er påkrevd og brukes av Speil, spleis-api og reserveløsningen i steg 6.
 - Gjør som [`d8558c8`](https://github.com/navikt/helse-spleis/commit/d8558c8dc7fdf4a16ccb5a703a975cbf652e508e) gjorde for opptjening: Legg til `medlemskapsvurderingId: UUID?` i `Vilkårsgrunnlag`, og bruk `medlemskapsvurderingId ?: UUID.randomUUID()`. Id-en må være nullable fordi togglen først er på i dev, og fordi et behov sendt før togglen ble slått på, kan få en løsning uten id. Feltet på grunnlaget er fortsatt påkrevd. Fjern reserveverdien når togglen er på i prod og alle gamle behov er besvart.
 
-Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`. Den ble skrudd på i dev 22.10 ([`d1032cc`](https://github.com/navikt/helse-spleis/commit/d1032cc94e)) og i prod 13.11 ([`57f2af1`](https://github.com/navikt/helse-spleis/commit/57f2af1aea)). Togglen og reserveverdien `UUID.randomUUID()` er ikke fjernet fra koden ennå. Fjern dem når alle behov som ble sendt før 13.11, er besvart:
+Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`. Den ble skrudd på i dev 22.10 ([`d1032cc`](https://github.com/navikt/helse-spleis/commit/d1032cc94e)) og i prod 13.11 ([`57f2af1`](https://github.com/navikt/helse-spleis/commit/57f2af1aea)). Togglen ble fjernet fra koden 20.11 ([`25e4a4d`](https://github.com/navikt/helse-spleis/commit/25e4a4d6b5)) og fra prod-oppsettet 26.11. Reserveverdien `UUID.randomUUID()` er ikke fjernet ennå. Fjern den når alle behov som ble sendt før 13.11, er besvart.
 
-- `EventBusOversetter` sender `Medlemskapsvurdering` sammen med `Medlemskap` når togglen er på.
+- `EventBusOversetter` sender alltid `Medlemskapsvurdering` sammen med `Medlemskap`.
 - `VilkårsgrunnlagRiver` er `interestedIn` i `@løsning.Medlemskapsvurdering.id`. Behovet står ikke i riverens behovliste, så løsninger uten det nye behovet blir fortsatt plukket opp.
 - `Vilkårsgrunnlag` har fått `medlemskapsvurderingId: UUID?` og bruker `medlemskapsvurderingId ?: UUID.randomUUID()`.
 - Testene ligger i `MedlemskapsvurderingIdTest`, `VilkårsgrunlagRiverMappingTest` og `BehovkontraktTest`.
 
-Med togglen på kan statusen på grunnlaget og id-en peke på ulike vurderinger. Statusen kommer fra et nytt oppslag i sparkel-medlemskap, mens sp-medlemskap gjenbruker den gjeldende vurderingen hvis den alt har en for skjæringstidspunktet. Beregningen bruker svaret for id-en (steg 6), og Spleis skriver en info-melding i aktivitetsloggen ved avvik. Speil viser vurderingen fra sp-medlemskap (steg 6b), så saksbehandler ser det samme svaret som beregningen bruker. Statusen på grunnlaget vises fortsatt i Spanner og spleis-api.
+Statusen på grunnlaget og id-en kan peke på ulike vurderinger. Statusen kommer fra et nytt oppslag i sparkel-medlemskap, mens sp-medlemskap gjenbruker den gjeldende vurderingen hvis den alt har en for skjæringstidspunktet. Beregningen bruker svaret for id-en (steg 6), og Spleis skriver en info-melding i aktivitetsloggen ved avvik. Speil viser vurderingen fra sp-medlemskap (steg 6b), så saksbehandler ser det samme svaret som beregningen bruker. Statusen på grunnlaget vises fortsatt i Spanner og spleis-api.
 
 #### Forhåndsvurderinger fra LovMe
 
@@ -717,7 +715,7 @@ Følg fortsatt med på volumet mot LovMe og alarmene for sp-medlemskap. Uten for
 
 #### Gjenstår i steg 7
 
-- Fjern togglen `MEDLEMSKAPSVURDERINGBEHOV` og reserveverdien `UUID.randomUUID()` i Spleis.
+- Fjern reserveverdien `UUID.randomUUID()` i Spleis.
 - Fjern sammenligningen med Spleis når vi vet nok om avvikene.
 
 #### Totrinnsvurdering
@@ -732,7 +730,7 @@ Beslutter skal ikke vurdere medlemskap selv. Speil skjuler «Vurder vilkår» fo
 
 #### Varsler når sp-medlemskap gjenbruker vurderingen
 
-Spleis gir ikke medlemskapsvarselet hvis det allerede er fattet vedtak med samme `medlemskapsvurderingId` (se [steg 6](#6-spleis-spør-den-nye-appen-om-resultatet)). Med togglen av gir hver vilkårsprøving en ny tilfeldig id, og dermed nytt varsel. Med togglen på gjenbruker sp-medlemskap vurderingen for personen og skjæringstidspunktet. Vilkårsprøves en periode på nytt med samme skjæringstidspunkt, får grunnlaget samme id, og Spleis gir ikke varselet på nytt. Det er riktig: Saksbehandler har allerede tatt stilling til akkurat den vurderingen. Skal medlemskapet vurderes på nytt, må det skje i sp-medlemskap. Den nye vurderingen får ny id og kommer til Spleis som `endret_medlemskapsvurdering`.
+Spleis gir ikke medlemskapsvarselet hvis det allerede er fattet vedtak med samme `medlemskapsvurderingId` (se [steg 6](#6-spleis-spør-den-nye-appen-om-resultatet)). Før steg 7 ga hver vilkårsprøving en ny tilfeldig id, og dermed nytt varsel. Nå gjenbruker sp-medlemskap vurderingen for personen og skjæringstidspunktet. Vilkårsprøves en periode på nytt med samme skjæringstidspunkt, får grunnlaget samme id, og Spleis gir ikke varselet på nytt. Det er riktig: Saksbehandler har allerede tatt stilling til akkurat den vurderingen. Skal medlemskapet vurderes på nytt, må det skje i sp-medlemskap. Den nye vurderingen får ny id og kommer til Spleis som `endret_medlemskapsvurdering`.
 
 Gamle og nye saker får ulik historikk:
 
