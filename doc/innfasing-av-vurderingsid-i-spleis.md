@@ -543,9 +543,9 @@ Status for hvert steg:
 | 4. Kanal for endrede vurderinger | I prod i Spleis. Bytter bare id-en, ikke `medlemskapstatus` |
 | 5. Reserveløsningen i den nye appen | I prod |
 | 6. Spleis spør den nye appen om resultatet | I prod siden 04.11. Togglen er fjernet. Reserveløsningen med statusen på grunnlaget finnes fortsatt |
-| 6b. Vis den nye appen i Speil uten å migrere | I prod bak togglen «Ny medlemskapsvisning», bare for utviklere. Neste steg er å gjøre den til standard |
-| 7. Den nye appen gjør vurderingen | På i dev. Ikke på i prod. sp-medlemskap tar imot forhåndsvurderinger fra LovMe i prod siden 12.11 |
-| 8. Migrer historikken | Ikke startet. `PersonAvstemmingRiver` er kommentert ut i `App.kt`, og `MIGRER_VED_OPPSLAG` er av i prod |
+| 6b. Vis den nye appen i Speil uten å migrere | Gjort. Den nye visningen er standard i Speil siden 12.11, og togglen er fjernet |
+| 7. Den nye appen gjør vurderingen | I prod siden 13.11. Overstyring er på i prod siden 26.11. Reserveverdien `UUID.randomUUID()` i `Vilkårsgrunnlag.kt` er ikke fjernet |
+| 8. Migrer historikken | I prod. `MIGRER_VED_OPPSLAG` siden 16.11 og `PersonAvstemmingRiver` siden 18.11. Gjenbruk av overførte vurderinger er ikke avklart |
 | 9. Id-en i godkjenningsbehovet | Gjort ([`22aa079`](https://github.com/navikt/helse-spleis/commit/22aa079509)) |
 | 10. Rydd opp | Ikke startet |
 
@@ -646,19 +646,21 @@ Testene ligger i `OppslagUtenMigreringTest`, `OverstyringSkruddAvTest` og `AppKo
 I Speil:
 
 - `sp-medlemskap` er lagt til i `deploy/prod.yml`, og backenden er ikke lenger bare for dev.
-- Togglen «Ny medlemskapsvisning» finnes i toggle-menyen også i prod. Menyen vises bare for utviklere, og i prod nullstilles togglen når siden lastes på nytt.
-- Knappen «Vurder vilkår» vises bare når `useKanOverstyreMedlemskap` er sann. Den er bare sann i dev.
+- Togglen «Ny medlemskapsvisning» fantes i toggle-menyen også i prod. Menyen vises bare for utviklere, og i prod ble togglen nullstilt når siden ble lastet på nytt. Togglen er fjernet nå (se under).
+- Knappen «Vurder vilkår» vises bare når `useKanOverstyreMedlemskap` er sann. Den var bare sann i dev til 26.11. Da ble den sann også i prod, og knappen er ikke lenger begrenset til coach, fagkoordinator og supersaksbehandler.
+- Beslutter ser ikke «Vurder vilkår», verken for medlemskap eller opptjening. Inngangsvilkårene er read only når oppgaven er en beslutteroppgave, også når beslutter har beslutteroppgavetilgang ([`211273712`](https://github.com/navikt/helse-speil/commit/211273712), 19.11). Før dette kunne beslutter med tilgang vurdere vilkårene.
+- En manuell medlemskapsvurdering kan ekspanderes i saksbehandlerhistorikken. Speil henter detaljene fra `GET /api/personer/{personId}/saksbehandlerhandlinger/{handlingId}/visning` i sp-medlemskap gjennom en egen proxy-rute ([`865e9ce3d`](https://github.com/navikt/helse-speil/commit/865e9ce3d), 19.11). Visningen har feltene «Medlemskap», «Journalposter» og «Begrunnelse». Statusen vises som «Oppfylt» eller «Ikke oppfylt» ([`f9b3bff`](https://github.com/navikt/helse-sp-medlemskap/commit/f9b3bff)). Automatiske og overførte vurderinger har ingen detaljer.
 
 Før steget skrus på i prod:
 
 - Steg 3 må være ferdig, slik at Speil har `medlemskapsvurderingId`.
 - sp-medlemskap må være deployet i prod med tilgang til spleis-api (steg 5). Speil-oppsettet i `deploy/prod.yml` forutsetter at appen kjører.
 
-Steg 7 slår på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod, når steg 4 også er i prod. Steg 8 slår på `MIGRER_VED_OPPSLAG`.
+Steg 7 skulle slå på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod. Steg 7 kom i prod 13.11, og overstyringen ble skrudd på i prod 26.11. Steg 8 slo på `MIGRER_VED_OPPSLAG` 16.11.
 
 Steget er i prod siden 10.11 ([`0bb81ad`](https://github.com/navikt/helse-speil/commit/0bb81ad27) i Speil og [`23efd40`](https://github.com/navikt/helse-sp-medlemskap/commit/23efd40) i sp-medlemskap).
 
-Neste steg er å gjøre den nye visningen til standard i Speil, før eller samtidig med at steg 7 skrus på i prod. Etter steg 7 bruker beregningen svaret fra sp-medlemskap, mens statusen på grunnlaget fortsatt kommer fra Spleis sitt eget oppslag. Den gamle visningen bruker statusen på grunnlaget og kan derfor vise et annet svar enn det beregningen faktisk bruker. Overstyringen er fortsatt bare i dev.
+Den nye visningen ble standard i Speil 12.11, dagen før steg 7 ble skrudd på i prod ([`c09d2928f`](https://github.com/navikt/helse-speil/commit/c09d2928f)). Den gamle visningen og togglen «Ny medlemskapsvisning» er fjernet. Det måtte skje før steg 7: Etter steg 7 bruker beregningen svaret fra sp-medlemskap, mens statusen på grunnlaget fortsatt kommer fra Spleis sitt eget oppslag. Den gamle visningen brukte statusen på grunnlaget og kunne derfor vise et annet svar enn det beregningen faktisk bruker.
 
 ### 7. Den nye appen gjør vurderingen
 
@@ -668,14 +670,14 @@ Behovet heter `Medlemskapsvurdering` og sendes ved vilkårsprøving, bak toggle.
 - Behold `Medlemskap` så lenge statusen på grunnlaget trengs. sp-medlemskap svarer bare med `id`, men `medlemskapstatus` på grunnlaget er påkrevd og brukes av Speil, spleis-api og reserveløsningen i steg 6.
 - Gjør som [`d8558c8`](https://github.com/navikt/helse-spleis/commit/d8558c8dc7fdf4a16ccb5a703a975cbf652e508e) gjorde for opptjening: Legg til `medlemskapsvurderingId: UUID?` i `Vilkårsgrunnlag`, og bruk `medlemskapsvurderingId ?: UUID.randomUUID()`. Id-en må være nullable fordi togglen først er på i dev, og fordi et behov sendt før togglen ble slått på, kan få en løsning uten id. Feltet på grunnlaget er fortsatt påkrevd. Fjern reserveverdien når togglen er på i prod og alle gamle behov er besvart.
 
-Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`. Den er på i dev siden 22.10 ([`d1032cc`](https://github.com/navikt/helse-spleis/commit/d1032cc94e)), men ikke i prod:
+Steget er laget i Spleis bak togglen `MEDLEMSKAPSVURDERINGBEHOV`. Den ble skrudd på i dev 22.10 ([`d1032cc`](https://github.com/navikt/helse-spleis/commit/d1032cc94e)) og i prod 13.11 ([`57f2af1`](https://github.com/navikt/helse-spleis/commit/57f2af1aea)). Togglen og reserveverdien `UUID.randomUUID()` er ikke fjernet fra koden ennå. Fjern dem når alle behov som ble sendt før 13.11, er besvart:
 
 - `EventBusOversetter` sender `Medlemskapsvurdering` sammen med `Medlemskap` når togglen er på.
 - `VilkårsgrunnlagRiver` er `interestedIn` i `@løsning.Medlemskapsvurdering.id`. Behovet står ikke i riverens behovliste, så løsninger uten det nye behovet blir fortsatt plukket opp.
 - `Vilkårsgrunnlag` har fått `medlemskapsvurderingId: UUID?` og bruker `medlemskapsvurderingId ?: UUID.randomUUID()`.
 - Testene ligger i `MedlemskapsvurderingIdTest`, `VilkårsgrunlagRiverMappingTest` og `BehovkontraktTest`.
 
-Med togglen på kan statusen på grunnlaget og id-en peke på ulike vurderinger. Statusen kommer fra et nytt oppslag i sparkel-medlemskap, mens sp-medlemskap gjenbruker den gjeldende vurderingen hvis den alt har en for skjæringstidspunktet. Når steg 6 er på, bruker beregningen svaret for id-en, og Spleis skriver en info-melding i aktivitetsloggen ved avvik. Speil og spleis-api viser fortsatt statusen på grunnlaget til steg 3 og Speil leser fra sp-medlemskap.
+Med togglen på kan statusen på grunnlaget og id-en peke på ulike vurderinger. Statusen kommer fra et nytt oppslag i sparkel-medlemskap, mens sp-medlemskap gjenbruker den gjeldende vurderingen hvis den alt har en for skjæringstidspunktet. Beregningen bruker svaret for id-en (steg 6), og Spleis skriver en info-melding i aktivitetsloggen ved avvik. Speil viser vurderingen fra sp-medlemskap (steg 6b), så saksbehandler ser det samme svaret som beregningen bruker. Statusen på grunnlaget vises fortsatt i Spanner og spleis-api.
 
 #### Forhåndsvurderinger fra LovMe
 
@@ -705,12 +707,28 @@ I Team Logs har meldingene `identitetsnummer` fra MDC og detaljene `medlemskapsv
 
 Sammenligningen er midlertidig. Fjern den når vi vet nok om avvikene.
 
-#### Før steg 7 skrus på i prod
+#### Rekkefølgen da steg 7 ble skrudd på i prod
 
-- Gjør den nye visningen til standard i Speil (se [6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
-- `FORHANDSVURDERING_VENTETID` er satt ned fra `PT5M` til `PT2M` for starten. sp-medlemskap har bare forhåndsvurderinger for søknader fra og med 12.11. De første ukene venter derfor de fleste arbeidstakere til fristen går ut.
-- Avklar med LovMe at volumet er greit. Uten forhåndsvurdering slår både Spleis og sp-medlemskap opp i sparkel-medlemskap.
-- Sjekk alarmene for sp-medlemskap. Appen må svare både ved vilkårsprøving og ved beregning.
+- 12.11: sp-medlemskap begynte å ta imot forhåndsvurderinger fra LovMe i prod ([`ceb8b12`](https://github.com/navikt/helse-sp-medlemskap/commit/ceb8b12)). Den nye visningen ble standard i Speil (se [6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
+- 12.11: `FORHANDSVURDERING_VENTETID` ble satt ned fra `PT5M` til `PT2M` ([`05a4f37`](https://github.com/navikt/helse-sp-medlemskap/commit/05a4f37)). sp-medlemskap har bare forhåndsvurderinger for søknader fra og med 12.11. De første ukene venter derfor de fleste arbeidstakere til fristen går ut.
+- 13.11: `MEDLEMSKAPSVURDERINGBEHOV` ble skrudd på i prod i Spleis.
+
+Følg fortsatt med på volumet mot LovMe og alarmene for sp-medlemskap. Uten forhåndsvurdering slår både Spleis og sp-medlemskap opp i sparkel-medlemskap, og sp-medlemskap må svare både ved vilkårsprøving og ved beregning.
+
+#### Gjenstår i steg 7
+
+- Fjern togglen `MEDLEMSKAPSVURDERINGBEHOV` og reserveverdien `UUID.randomUUID()` i Spleis.
+- Fjern sammenligningen med Spleis når vi vet nok om avvikene.
+
+#### Totrinnsvurdering
+
+Spesialist krever totrinnsvurdering for alle saker med et aktivt `RV_MV_1`-varsel i behandlingspakken, uavhengig av sp-medlemskap (`VurderBehovForTotrinnskontroll.kt` i Spesialist, siden 2022). `RV_MV_1` kommer fra Spleis ved `UAVKLART_MED_BRUKERSPORSMAAL`. `RV_MV_2` ved `NEI` gir ikke totrinnsvurdering.
+
+En manuell vurdering i sp-medlemskap sender i tillegg en saksbehandlerhandling med `kreverTotrinnsvurdering = true`. Spesialist oppretter da en totrinnsvurdering for personen, og den gjenbrukes for alle perioder til den er ferdig. Skal saker med medlemskapsvarsel ikke gå til beslutter, må regelen i Spesialist endres. Det er ikke nok å endre det sp-medlemskap sender.
+
+19.11 ble det prøvd å kreve totrinnsvurdering bare når den manuelle vurderingen endrer om det blir utbetaling ([`873cb7f`](https://github.com/navikt/helse-sp-medlemskap/commit/873cb7f), [navikt/sas-issues#248](https://github.com/navikt/sas-issues/issues/248)). Endringen ble reversert samme dag ([`5803194`](https://github.com/navikt/helse-sp-medlemskap/commit/5803194)). En manuell vurdering krever derfor fortsatt alltid totrinnsvurdering.
+
+Beslutter skal ikke vurdere medlemskap selv. Speil skjuler «Vurder vilkår» for beslutter (se [6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)). sp-medlemskap stopper det ikke: `POST .../vilkarsvurderinger/manuell` sjekker ikke om saksbehandleren er beslutter for oppgaven.
 
 #### Varsler når sp-medlemskap gjenbruker vurderingen
 
@@ -725,11 +743,17 @@ Spleis tvinger ikke fram den nye praksisen. Godkjenner saksbehandler fortsatt p�
 
 ### 8. Migrer historikken
 
-Slå på `PersonAvstemmingRiver` i dev, så i prod. Følg med på volumet og antall replikaer.
+Migreringen er skrudd på i prod i to omganger, etter at steg 7 var på:
 
-Slå også på `MIGRER_VED_OPPSLAG` i prod (se [steg 6b](#6b-vis-den-nye-appen-i-speil-uten-å-migrere)).
+- 16.11: `MIGRER_VED_OPPSLAG` ble slått på i prod, så personen migreres når Speil slår den opp ([`8be99ec`](https://github.com/navikt/helse-sp-medlemskap/commit/8be99ec)).
+- 18.11: `PersonAvstemmingRiver` ble slått på ([`0702d2e`](https://github.com/navikt/helse-sp-medlemskap/commit/0702d2e)). Den er på i både dev og prod, uten egen bryter.
+- 19.11: Flere samtidige oppslag av samme person fra Speil ga feil fordi personen ble migrert to ganger samtidig. `PersonAvstemmingService` tar nå en advisory lock per person og sjekker migreringsloggen på nytt inne i transaksjonen ([`2fd1bc8`](https://github.com/navikt/helse-sp-medlemskap/commit/2fd1bc8)).
 
-Migreringen haster ikke. Uten den henter Speil vurderingene fra Spleis-API-et via sp-medlemskap. Undersøk dette før migreringen skrus på: `MedlemskapService.vurderMedlemskap` gjenbruker den gjeldende vurderingen for skjæringstidspunktet, og etter migreringen kan den være overført fra Infotrygd (`JA`) eller fra Spleis. Vilkårsprøver Spleis et skjæringstidspunkt som tidligere hadde et Infotrygd-grunnlag, svarer sp-medlemskap da `JA` uten å slå opp i LovMe. Vurder å holde overførte vurderinger utenfor gjenbruken.
+Følg med på volumet fra `person_avstemming` og antall replikaer. Opptjening måtte skru avstemmingen av og på igjen i prod (se [steg 8](#steg-8-migrer-historikken)).
+
+Steg 7 kan ikke lenger rulles tilbake. En person migreres bare én gang, så vurderinger Spleis lager etter migreringen, blir aldri hentet over.
+
+**Ikke avklart:** `MedlemskapService.vurderMedlemskap` gjenbruker den gjeldende vurderingen for skjæringstidspunktet. Etter migreringen kan den være overført fra Infotrygd (`JA`) eller fra Spleis. Vilkårsprøver Spleis et skjæringstidspunkt som tidligere hadde et Infotrygd-grunnlag, svarer sp-medlemskap da `JA` uten å slå opp i LovMe. Dette var planlagt undersøkt før migreringen, men `gjeldende` skiller fortsatt ikke på kilde. Vurder å holde overførte vurderinger utenfor gjenbruken.
 
 ### 9. Id-en i godkjenningsbehovet
 
