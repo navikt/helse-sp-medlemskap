@@ -636,12 +636,12 @@ Ved vilkårsprøving kom varselet bare én gang per vilkårsgrunnlag. Ved beregn
 
 ### 6b. Vis den nye appen i Speil uten å migrere
 
-sp-medlemskap har to brytere. Begge er av som standard og står som `"true"` i `.nais/sp-medlemskap.dev-gcp.yaml`:
+sp-medlemskap hadde to brytere. Begge var av som standard og sto som `"true"` i `.nais/sp-medlemskap.dev-gcp.yaml`:
 
 - `MIGRER_VED_OPPSLAG` styrer om `GET .../vilkarsvurderinger` og `GET .../medlemskapsvurderinger/historikk` migrerer personen. Når den er av, svarer endepunktene med det som er lagret, og henter resten fra Spleis-API-et uten å lagre det. Ukjent id gir 404, og feil fra Spleis gir 503.
-- `OVERSTYRING_AV_MEDLEMSKAP` styrer om manuell vurdering er lov. Når den er av, svarer endepunktet med 409 og feilkoden `OverstyringErSkruddAv`.
+- `OVERSTYRING_AV_MEDLEMSKAP` styrte om manuell vurdering var lov. Når den var av, svarte endepunktet med 409 og feilkoden `OverstyringErSkruddAv`. Bryteren ble fjernet 26.11, og manuell vurdering er nå alltid lov.
 
-Testene ligger i `OppslagUtenMigreringTest`, `OverstyringSkruddAvTest` og `AppKonfigurasjonTest`.
+Testene ligger i `OppslagUtenMigreringTest` og `AppKonfigurasjonTest`.
 
 I Speil:
 
@@ -656,7 +656,7 @@ Før steget skrus på i prod:
 - Steg 3 må være ferdig, slik at Speil har `medlemskapsvurderingId`.
 - sp-medlemskap må være deployet i prod med tilgang til spleis-api (steg 5). Speil-oppsettet i `deploy/prod.yml` forutsetter at appen kjører.
 
-Steg 7 skulle slå på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod. Steg 7 kom i prod 13.11, og overstyringen ble skrudd på i prod 26.11. Steg 8 slo på `MIGRER_VED_OPPSLAG` 16.11.
+Steg 7 skulle slå på `OVERSTYRING_AV_MEDLEMSKAP` og `useKanOverstyreMedlemskap` i prod. Steg 7 kom i prod 13.11, og overstyringen ble skrudd på i prod 26.11 ved at bryteren ble fjernet. Steg 8 slo på `MIGRER_VED_OPPSLAG` 16.11.
 
 Steget er i prod siden 10.11 ([`0bb81ad`](https://github.com/navikt/helse-speil/commit/0bb81ad27) i Speil og [`23efd40`](https://github.com/navikt/helse-sp-medlemskap/commit/23efd40) i sp-medlemskap).
 

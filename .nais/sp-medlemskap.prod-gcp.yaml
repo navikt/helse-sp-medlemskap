@@ -43,5 +43,3 @@ spec:
       value: PT2M
     - name: MIGRER_VED_OPPSLAG
       value: "true"
-    - name: OVERSTYRING_AV_MEDLEMSKAP
-      value: "true"

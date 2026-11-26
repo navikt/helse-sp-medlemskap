@@ -69,11 +69,6 @@ data class AppKonfigurasjon(
      * skrus på i prod før sp-medlemskap gjør vurderingen selv.
      */
     val migrerVedOppslag: Boolean = false,
-    /**
-     * Om saksbehandler kan vurdere medlemskap manuelt. Settes med
-     * `OVERSTYRING_AV_MEDLEMSKAP=true`, og skal ikke skrus på i prod før sp-medlemskap gjør vurderingen selv.
-     */
-    val overstyringErSkruddPå: Boolean = false,
 ) {
     companion object {
         fun fraEnv(
@@ -88,7 +83,6 @@ data class AppKonfigurasjon(
             openApi = OpenApiConfig.fraEnv(appNavn, env),
             forhåndsvurderingVentetid = env["FORHANDSVURDERING_VENTETID"]?.let(Duration::parse),
             migrerVedOppslag = env["MIGRER_VED_OPPSLAG"].toBoolean(),
-            overstyringErSkruddPå = env["OVERSTYRING_AV_MEDLEMSKAP"].toBoolean(),
         )
     }
 }
@@ -204,7 +198,6 @@ private fun Application.ktorApp(
             spleisClient = spleisClient,
             transaksjonProvider = transaksjonProvider,
             migrerVedOppslag = konfigurasjon.migrerVedOppslag,
-            overstyringErSkruddPå = konfigurasjon.overstyringErSkruddPå,
         ),
     )
     monitor.subscribe(ApplicationStarted) {
@@ -220,7 +213,6 @@ internal fun endepunkter(
     spleisClient: ISpleisClient,
     transaksjonProvider: TransaksjonProvider<Transaksjonskontekst>,
     migrerVedOppslag: Boolean,
-    overstyringErSkruddPå: Boolean,
 ): RestRuting<Transaksjonskontekst>.() -> Unit =
     {
         val avstemmingService = PersonAvstemmingService(transaksjonProvider, spleisClient)
@@ -228,5 +220,5 @@ internal fun endepunkter(
         get(GetMedlemskapshistorikkBehandler(avstemmingService, migrerVedOppslag))
         get(GetSaksbehandlerhandlingVisningBehandler())
 
-        post(PostManuellVilkårsvurderingBehandler(overstyringErSkruddPå))
+        post(PostManuellVilkårsvurderingBehandler())
     }

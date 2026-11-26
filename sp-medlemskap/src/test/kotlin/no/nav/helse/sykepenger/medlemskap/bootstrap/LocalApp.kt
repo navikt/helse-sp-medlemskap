@@ -59,7 +59,6 @@ fun main() {
                         spleisClient = TomSpleisClient(),
                         transaksjonProvider = transaksjonProvider,
                         migrerVedOppslag = true,
-                        overstyringErSkruddPå = true,
                     ),
             )
         }

@@ -26,20 +26,14 @@ class AppKonfigurasjonTest {
     }
 
     @Test
-    fun `migrering ved oppslag og overstyring er av med mindre de er skrudd på`() {
+    fun `migrering ved oppslag er av med mindre den er skrudd på`() {
         val konfigurasjon = AppKonfigurasjon.fraEnv("sp-medlemskap", fullEnv)
         assertEquals(false, konfigurasjon.migrerVedOppslag)
-        assertEquals(false, konfigurasjon.overstyringErSkruddPå)
     }
 
     @Test
-    fun `migrering ved oppslag og overstyring kan skrus på`() {
-        val konfigurasjon =
-            AppKonfigurasjon.fraEnv(
-                "sp-medlemskap",
-                fullEnv + mapOf("MIGRER_VED_OPPSLAG" to "true", "OVERSTYRING_AV_MEDLEMSKAP" to "true"),
-            )
+    fun `migrering ved oppslag kan skrus på`() {
+        val konfigurasjon = AppKonfigurasjon.fraEnv("sp-medlemskap", fullEnv + mapOf("MIGRER_VED_OPPSLAG" to "true"))
         assertEquals(true, konfigurasjon.migrerVedOppslag)
-        assertEquals(true, konfigurasjon.overstyringErSkruddPå)
     }
 }
