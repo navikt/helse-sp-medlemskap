@@ -16,7 +16,7 @@ on:
       - '!.github/workflows/standard-dependabot-auto-merge.yml'
       - '!.github/workflows/standard-dependency-submission.yml'
       # Ressursene som deployes av denne workflowen
-      - '../../.nais/sp-medlemskap.yaml'
+      - '.nais/sp-medlemskap.yaml'
       - '.nais/sp-medlemskap.*.yaml'
       # Spesielt for denne tjenesten ellers
       - '!.github/workflows/standard-pr.yml'
